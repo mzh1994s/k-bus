@@ -9,10 +9,12 @@ import java.net.Socket;
  * @author mzhong
  * @version 1.0
  */
-public class SocketProxy implements Proxy<Socket, Socket> {
-    
-    @Override
-    public void proxy(Socket accept, Socket client) {
+public class SocketProxy {
 
+    Socket accept;
+    Socket target;
+
+    public SocketProxy(Socket accept) {
+        this.accept = accept;
     }
 }

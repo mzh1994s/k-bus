@@ -18,7 +18,7 @@ public class HttpTest {
         server.setListen(9001);
         Location location = new Location();
         location.setValue("/");
-        location.setValue("http://www.neea.edu.cn/");
+        location.setProxyPass("http://www.neea.edu.cn/");
         server.addLocation(location);
         bus.http.servers.add(server);
         bus.start();

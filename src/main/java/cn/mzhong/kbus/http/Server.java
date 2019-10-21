@@ -1,11 +1,14 @@
 package cn.mzhong.kbus.http;
 
+import cn.mzhong.kbus.util.StreamUtils;
+
 import java.io.*;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 
 /**
  * TODO<br>
@@ -65,13 +68,11 @@ public class Server {
         initSocket();
         http.bus.getExecutorService().execute(() -> {
             while (true) {
-                http.bus.getExecutorService().execute(() -> {
-                    try {
-                        accept(server.accept());
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                });
+                try {
+                    accept(server.accept());
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
             }
         });
     }
@@ -80,88 +81,65 @@ public class Server {
         return null;
     }
 
-    private void accept(Socket accept) throws IOException {
-        // 在取header等信息时，需要读取accept的流，但是流只能获取一次，所以使用Byte流作为中转
-        InputStream acceptInputStream = accept.getInputStream();
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        BufferedWriter bufferedWriter = new BufferedWriter(new OutputStreamWriter(outputStream));
-        BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(accept.getInputStream()));
-        // 第一行没有header信息。
-        String line = bufferedReader.readLine();
-        bufferedWriter.write(line);
-        bufferedWriter.newLine();
-        String[] headerNames = {"Host: "};
-        // 请求报文会有一个空行，读到空行就结束
-        while (!"".equals(line = bufferedReader.readLine())) {
-            for (String headerName : headerNames) {
-                if (line.startsWith(headerName)) {
-                    System.out.println(line.substring(headerName.length()));
-                }
-            }
-            bufferedWriter.write(line);
-            bufferedWriter.newLine();
-        }
-        // client
-        Socket socket = new Socket();
-        socket.connect(new InetSocketAddress("localhost", 8080));
-        OutputStream acceptOutputStream = accept.getOutputStream();
-        InputStream socketInputStream = socket.getInputStream();
-        OutputStream socketOutputStream = socket.getOutputStream();
-        sendAndReceive(acceptInputStream, acceptOutputStream, socketInputStream, socketOutputStream);
-    }
-
-    private static void sendAndReceive(
-            InputStream acceptInputStream, OutputStream acceptOutputStream,
-            InputStream socketInputStream, OutputStream socketOutputStream) {
-        try {
-            copy(acceptInputStream, socketOutputStream);
-            copy(socketInputStream, acceptOutputStream);
-            wait(acceptInputStream);
-            wait(socketInputStream);
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            close(acceptInputStream);
-            close(socketInputStream);
-            close(acceptOutputStream);
-            close(socketOutputStream);
-        }
-    }
-
-    private static void copy(InputStream inputStream, OutputStream outputStream) throws IOException {
-        new Thread(() -> {
+    private void accept(Socket accept) {
+        http.bus.getExecutorService().execute(() -> {
             try {
-                byte[] buf = new byte[4096];
-                int len;
-                while ((len = inputStream.read(buf)) != -1) {
-                    outputStream.write(buf, 0, len);
-                    outputStream.flush();
-                }
-            } catch (Exception e) {
+                acceptInternal(accept);
+            } catch (IOException | InterruptedException e) {
                 e.printStackTrace();
-            } finally {
-                notify(inputStream);
             }
-        }).start();
+        });
     }
 
-    private static void wait(Object object) throws InterruptedException {
-        synchronized (object) {
-            object.wait();
-        }
-    }
-
-    private static void notify(Object object) {
-        synchronized (object) {
-            object.notify();
-        }
-    }
-
-    private static void close(Closeable closeable) {
+    private void acceptInternal(Socket accept) throws IOException, InterruptedException {
+        InputStream acceptInputStream = null;
+        OutputStream acceptOutputStream = null;
+        InputStream socketInputStream = null;
+        OutputStream socketOutputStream = null;
+        Socket socket = null;
         try {
-            closeable.close();
-        } catch (IOException e) {
-            e.printStackTrace();
+            // 在取header等信息时，需要读取accept的流，但是流只能获取一次，所以使用Byte流作为中转
+            acceptInputStream = accept.getInputStream();
+            BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(acceptInputStream));
+            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+            BufferedWriter bufferedWriter = new BufferedWriter(new OutputStreamWriter(byteArrayOutputStream));
+            String line;
+            String[] headerNames = {"Host: ", "Connection: "};
+            // 请求报文会有一个空行，读到空行就结束
+            while (!"".equals(line = bufferedReader.readLine())) {
+                for (String headerName : headerNames) {
+                    if (line.startsWith(headerName)) {
+                        System.out.println(line.substring(headerName.length()));
+                    }
+                }
+                bufferedWriter.write(line);
+                bufferedWriter.newLine();
+            }
+            // 记得还有一个空行
+            bufferedWriter.newLine();
+            bufferedWriter.flush();
+            // 通过获取到的host名称匹配目标服务器
+            socket = new Socket();
+            socket.connect(new InetSocketAddress("www.cqksy.cn", 80));
+            acceptOutputStream = accept.getOutputStream();
+            socketInputStream = socket.getInputStream();
+            socketOutputStream = socket.getOutputStream();
+            // 将前面已经获取的数据先写进去
+            socketOutputStream.write(byteArrayOutputStream.toByteArray());
+            socketOutputStream.flush();
+            // 将没有发送完的数据发送完成
+            CountDownLatch sendLatch = StreamUtils.copyInThread(http.bus.getExecutorService(),
+                    acceptInputStream, socketOutputStream);
+            // 接收数据
+            StreamUtils.copy(socketInputStream, acceptOutputStream);
+            sendLatch.await();
+        } finally {
+            StreamUtils.closeSilent(acceptInputStream);
+            StreamUtils.closeSilent(socketInputStream);
+            StreamUtils.closeSilent(acceptOutputStream);
+            StreamUtils.closeSilent(socketOutputStream);
+            StreamUtils.closeSilent(accept);
+            StreamUtils.closeSilent(socket);
         }
     }
 
