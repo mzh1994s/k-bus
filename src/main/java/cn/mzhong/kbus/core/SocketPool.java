@@ -1,7 +1,8 @@
 package cn.mzhong.kbus.core;
 
-import java.io.IOException;
 import java.net.Socket;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingDeque;
 
 /**
  * TODO<br>
@@ -12,15 +13,25 @@ import java.net.Socket;
  */
 public class SocketPool {
 
-    public Socket getSocket() {
-        return new Socket();
+    BlockingQueue<Socket> pool = new LinkedBlockingDeque<>();
+
+    private int max = 30;
+    private int num = 0;
+
+    public Socket getSocket() throws InterruptedException {
+        if (pool.isEmpty()) {
+            if (num < max) {
+                Socket socket = new Socket();
+                pool.put(socket);
+                num++;
+            }
+        }
+        Socket take;
+        while ((take = pool.take()).isClosed()) ;
+        return take.isClosed() ? getSocket() : take;
     }
 
-    void returnSocket(Socket socket) {
-        try {
-            socket.close();
-        } catch (IOException ignored) {
-
-        }
+    public void returnSocket(Socket socket) throws InterruptedException {
+        pool.put(socket);
     }
 }

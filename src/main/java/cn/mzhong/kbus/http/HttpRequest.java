@@ -17,12 +17,14 @@ public class HttpRequest {
     private HttpHeader httpHeader;
     private InputStream inputStream;
     private OutputStream outputStream;
+    private byte[] data;
 
-    public HttpRequest(String method, String uri, String version, HttpHeader httpHeader, InputStream inputStream, OutputStream outputStream) {
+    public HttpRequest(String method, String uri, String version, HttpHeader httpHeader, byte[] data, InputStream inputStream, OutputStream outputStream) {
         this.method = method;
         this.uri = uri;
         this.version = version;
         this.httpHeader = httpHeader;
+        this.data = data;
         this.inputStream = inputStream;
         this.outputStream = outputStream;
     }
@@ -41,6 +43,10 @@ public class HttpRequest {
 
     public HttpHeader getHttpHeader() {
         return httpHeader;
+    }
+
+    public byte[] getData() {
+        return data;
     }
 
     public InputStream getInputStream() {

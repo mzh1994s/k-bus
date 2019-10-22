@@ -60,16 +60,19 @@ public class HttpBioAcceptor extends AbstractHttpAcceptor {
 
     private void acceptInternal(Socket socket) throws IOException {
         HttpBioParser parser = new HttpBioParser(socket);
-        HttpRequest httpRequest = parser.doParse();
-        HttpConnector connector = selectConnector();
-        Location location = HttpUriLocationMatcher.match(server.getLocations(), httpRequest.getUri());
-        if (location != null) {
-            String proxyPass = location.getProxyPass();
-            URL url = new URL(proxyPass);
-            int port = url.getPort();
-            connector.connect(httpRequest, url.getHost(), port == -1 ? 80 : port);
-        } else {
-            socket.close();
+        HttpRequest httpRequest;
+        while ((httpRequest = parser.next()) != null) {
+            HttpConnector connector = selectConnector();
+            Location location = HttpUriLocationMatcher.match(server.getLocations(), httpRequest.getUri());
+            if (location != null) {
+                String proxyPass = location.getProxyPass();
+                URL url = new URL(proxyPass);
+                int port = url.getPort();
+                connector.connect(httpRequest, url.getHost(), port == -1 ? 80 : port);
+            } else {
+                socket.close();
+            }
         }
+        socket.close();
     }
 }

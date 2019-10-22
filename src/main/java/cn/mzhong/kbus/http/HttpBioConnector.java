@@ -8,7 +8,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.concurrent.ExecutorService;
 
@@ -34,18 +33,15 @@ public class HttpBioConnector implements HttpConnector {
 
     @Override
     public void connect(HttpRequest request, String host, int port) throws IOException {
-        Socket socket = new Socket();
-        socket.connect(new InetSocketAddress(host, port));
-        try (InputStream socketIn = socket.getInputStream();
-             OutputStream socketOut = socket.getOutputStream();
-             InputStream sourceIn = request.getInputStream();
-             OutputStream sourceOut = request.getOutputStream()) {
+        try (Socket socket = new Socket(host, port)) {
+            InputStream socketIn = socket.getInputStream();
+            OutputStream socketOut = socket.getOutputStream();
+            OutputStream sourceOut = request.getOutputStream();
+            socketOut.write(request.getData());
+            socketOut.flush();
+            socket.shutdownOutput();
             byte[] buf = new byte[4096];
             int len;
-            while ((len = sourceIn.read(buf)) != -1) {
-                socketOut.write(buf, 0, len);
-            }
-            socketOut.flush();
             long start = System.currentTimeMillis();
             while ((len = socketIn.read(buf)) != -1) {
                 sourceOut.write(buf, 0, len);
@@ -54,7 +50,9 @@ public class HttpBioConnector implements HttpConnector {
             if (log.isDebugEnabled()) {
                 log.debug("接收耗时：" + (System.currentTimeMillis() - start));
             }
+            socket.shutdownInput();
         } catch (Exception ignored) {
+            ignored.printStackTrace();
         }
     }
 }
