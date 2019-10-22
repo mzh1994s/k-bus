@@ -14,21 +14,26 @@ import java.util.Set;
  */
 public class Http {
 
-    public final Set<Server> servers = new HashSet<>();
-    final KBus bus;
+    private final Set<Server> servers = new HashSet<>();
+    private final KBus bus;
 
     public Http(KBus parent) {
         this.bus = parent;
+    }
+
+    public KBus getBus() {
+        return bus;
+    }
+
+    public Server createServer() {
+        Server server = new Server(this);
+        servers.add(server);
+        return server;
     }
 
     public void start() {
         for (Server server : servers) {
             server.start();
         }
-    }
-
-    public Http addServer(Server server) {
-        this.servers.add(server);
-        return this;
     }
 }

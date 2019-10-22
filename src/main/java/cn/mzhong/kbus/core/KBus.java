@@ -13,19 +13,38 @@ import java.util.concurrent.Executors;
  */
 public class KBus {
 
+    private IOType ioType = IOType.BIO;
     /**
      * 临时使用这个，后面可能换创建实例的方式
      */
-    private final ExecutorService executorService = Executors.newCachedThreadPool();
+    private final ExecutorService executor = Executors.newCachedThreadPool();
 
-    public final Http http = new Http(this);
+    private final Http http = new Http(this);
+
+    private SocketPool socketPool = new SocketPool();
+
+    public ExecutorService getExecutor() {
+        return executor;
+    }
+
+    public Http getHttp() {
+        return http;
+    }
+
+    public SocketPool getSocketPool() {
+        return socketPool;
+    }
+
+    public IOType getIoType() {
+        return ioType;
+    }
+
+    public void setIoType(IOType ioType) {
+        this.ioType = ioType;
+    }
 
     public void start() {
         http.start();
     }
 
-
-    public ExecutorService getExecutorService() {
-        return executorService;
-    }
 }
