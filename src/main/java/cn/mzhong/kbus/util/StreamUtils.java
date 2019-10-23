@@ -15,6 +15,7 @@ import java.util.concurrent.ExecutorService;
  * @version 1.0
  */
 public class StreamUtils {
+
     private StreamUtils() {
     }
 

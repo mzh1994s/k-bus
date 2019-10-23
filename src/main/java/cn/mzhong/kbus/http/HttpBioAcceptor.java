@@ -59,7 +59,7 @@ public class HttpBioAcceptor extends AbstractHttpAcceptor {
     }
 
     private void acceptInternal(Socket socket) throws IOException {
-        HttpBioParser parser = new HttpBioParser(socket);
+        HttpBioParser2 parser = new HttpBioParser2(socket);
         HttpRequest httpRequest;
         while ((httpRequest = parser.next()) != null) {
             HttpConnector connector = selectConnector();

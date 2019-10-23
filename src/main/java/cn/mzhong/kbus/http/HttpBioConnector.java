@@ -33,7 +33,9 @@ public class HttpBioConnector implements HttpConnector {
 
     @Override
     public void connect(HttpRequest request, String host, int port) throws IOException {
-        try (Socket socket = new Socket(host, port)) {
+        Socket socket = null;
+        try {
+            socket = new Socket(host, port);
             InputStream socketIn = socket.getInputStream();
             OutputStream socketOut = socket.getOutputStream();
             OutputStream sourceOut = request.getOutputStream();
@@ -45,6 +47,7 @@ public class HttpBioConnector implements HttpConnector {
             long start = System.currentTimeMillis();
             while ((len = socketIn.read(buf)) != -1) {
                 sourceOut.write(buf, 0, len);
+                System.out.println(new String(buf, 0, len));
             }
             sourceOut.flush();
             if (log.isDebugEnabled()) {
@@ -53,6 +56,13 @@ public class HttpBioConnector implements HttpConnector {
             socket.shutdownInput();
         } catch (Exception ignored) {
             ignored.printStackTrace();
+        } finally {
+            if (socket != null) {
+                try {
+                    socketPool.returnSocket(socket);
+                } catch (Exception ignored) {
+                }
+            }
         }
     }
 }
