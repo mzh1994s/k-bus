@@ -1,9 +1,13 @@
 package cn.mzhong.kbus.http;
 
+import cn.mzhong.kbus.util.StreamUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.*;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.Socket;
 
 /**
@@ -17,61 +21,73 @@ public class HttpBioParser {
 
     private final static Logger log = LoggerFactory.getLogger(HttpBioParser.class);
 
-    private ByteArrayOutputStream tempStream;
+    private ByteArrayOutputStream dataStream;
     private InputStream inputStream;
+    private OutputStream outputStream;
     private Socket socket;
-    private BufferedReader reader;
-    private BufferedWriter tempWriter;
+    private boolean isKeepAlive = false;
+    private int bufferSize;
+    private HttpLog httpLog;
 
-    HttpBioParser(Socket socket) {
+    HttpBioParser(Socket socket, int bufferSize) {
         this.socket = socket;
+        this.bufferSize = bufferSize;
+        this.httpLog = HttpLog.threadLocal.get();
     }
 
     public HttpRequest next() {
+        if (socket.isClosed()) {
+            return null;
+        }
+        this.httpLog.start();
         try {
-            this.tempStream = new ByteArrayOutputStream();
+            this.dataStream = new ByteArrayOutputStream();
             this.inputStream = socket.getInputStream();
-            this.reader = new BufferedReader(new InputStreamReader(inputStream));
-            this.tempWriter = new BufferedWriter(new OutputStreamWriter(tempStream));
-            long start = System.currentTimeMillis();
+            this.outputStream = socket.getOutputStream();
             String[] split = this.doParseRequest();
+            String method = split[0];
+            String uri = split[1];
+            String version = split[2];
             HttpHeader httpHeader = this.doParseHeader();
             this.doFinal(httpHeader);
-            if (log.isDebugEnabled()) {
-                log.debug("解析请求耗时：" + (System.currentTimeMillis() - start));
-            }
-            return new HttpRequest(split[0], split[1], split[2], httpHeader,
-                    tempStream.toByteArray(), inputStream, socket.getOutputStream());
+            return new HttpRequest(method, uri, version, httpHeader,
+                    dataStream.toByteArray(), inputStream, outputStream);
         } catch (Exception e) {
             return null;
+        } finally {
+            if (!isKeepAlive) {
+                try {
+                    socket.close();
+                } catch (IOException ignored) {
+                }
+            }
+            this.httpLog.saveRequestExpand();
         }
     }
 
     private String[] doParseRequest() throws IOException {
-        String firstLine = reader.readLine();
+        String firstLine = StreamUtils.readLineAndWrite(inputStream, dataStream);
         if (firstLine == null) {
             throw new IOException();
         }
-        tempWriter.write(firstLine);
-        tempWriter.newLine();
+        this.httpLog.setRequestLine(firstLine);
         return firstLine.split(" ");
     }
 
     private HttpHeader doParseHeader() throws IOException {
         HttpHeader httpHeader = new HttpHeader();
         String line;
-        while ((line = reader.readLine()) != null) {
+        while ((line = StreamUtils.readLineAndWrite(inputStream, dataStream)) != null) {
             if (line.startsWith("Host: ")) {
                 httpHeader.setHost(line.substring(6));
                 line = "Host: www.cqksy.cn";
             } else if (line.startsWith("Content-Length: ")) {
                 httpHeader.setContentLength(Integer.parseInt(line.substring(16)));
             } else if (line.startsWith("Connection: ")) {
-                continue;
+                isKeepAlive = "keep-alive".equals(line.substring(12));
             }
-            tempWriter.write(line);
-            tempWriter.newLine();
-            if ("".equals(line)) {
+            // 空行判断
+            if (line.isEmpty()) {
                 break;
             }
         }
@@ -79,14 +95,6 @@ public class HttpBioParser {
     }
 
     private void doFinal(HttpHeader httpHeader) throws IOException {
-        int contentLength = httpHeader.getContentLength();
-        if (contentLength != 0) {
-            char[] buf = new char[contentLength];
-            int read = this.reader.read(buf);
-            if (read != -1) {
-                this.tempWriter.write(buf);
-            }
-        }
-        this.tempWriter.flush();
+        StreamUtils.copy(inputStream, outputStream, bufferSize, httpHeader.getContentLength());
     }
 }

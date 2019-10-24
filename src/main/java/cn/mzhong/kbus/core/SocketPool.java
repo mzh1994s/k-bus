@@ -3,11 +3,10 @@ package cn.mzhong.kbus.core;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
-import java.net.SocketAddress;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * TODO<br>
@@ -18,35 +17,49 @@ import java.util.concurrent.LinkedBlockingDeque;
  */
 public class SocketPool {
 
-    Map<SocketAddress, BlockingQueue<Socket>> poolMap = new HashMap<>();
+    Map<String, BlockingQueue<Socket>> poolMap = new HashMap<>();
 
     private int max = 30;
     private int num = 0;
 
     public synchronized Socket getSocket(String host, int port) throws InterruptedException, IOException {
-        SocketAddress address = new InetSocketAddress(host, port);
-        BlockingQueue<Socket> pool = poolMap.get(address);
+        String key = host + ":" + port;
+        BlockingQueue<Socket> pool = poolMap.get(key);
         if (pool == null) {
-            pool = new LinkedBlockingDeque<>();
-            poolMap.put(address, pool);
+            pool = new LinkedBlockingQueue<>();
+            poolMap.put(key, pool);
         }
-        if (pool.isEmpty()) {
-            if (num < max) {
-                Socket socket = new Socket();
-                socket.connect(address);
-                pool.put(socket);
-                num++;
+        Socket socket;
+        while (!pool.isEmpty()) {
+            socket = pool.take();
+            if (!socket.isClosed()) {
+                return socket;
             }
+            num--;
         }
-        Socket take;
-        while ((take = pool.take()).isClosed()) ;
-        return take.isClosed() ? getSocket(host, port) : take;
+
+        if (num < max) {
+            socket = new Socket(host, port);
+            num++;
+            return socket;
+        }
+        socket = pool.take();
+        if (socket.isClosed()) {
+            num--;
+            return getSocket(host, port);
+        }
+        return socket;
     }
 
-    public void returnSocket(Socket socket) throws InterruptedException {
-        SocketAddress socketAddress = socket.getRemoteSocketAddress();
+    public synchronized void returnSocket(Socket socket) {
+        InetSocketAddress socketAddress = (InetSocketAddress) socket.getRemoteSocketAddress();
         if (socketAddress != null && !socket.isClosed()) {
-            poolMap.get(socketAddress).put(socket);
+            try {
+                poolMap.get(socketAddress.getHostName() + ":" + socketAddress.getPort()).put(socket);
+            } catch (Exception ignored) {
+            }
+        } else {
+            num--;
         }
     }
 }

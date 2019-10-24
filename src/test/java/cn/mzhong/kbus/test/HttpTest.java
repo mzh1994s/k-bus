@@ -13,7 +13,9 @@ import cn.mzhong.kbus.http.Server;
  */
 public class HttpTest {
     public static void main(String[] args) {
-        KBus bus = new KBus();
+        KBus.Config config = new KBus.Config();
+        config.setBufferSize(8192);
+        KBus bus = new KBus(config);
         Server server = bus.getHttp().createServer();
         server.setListen(9001);
         Location location = new Location();
