@@ -11,42 +11,45 @@ import java.io.OutputStream;
  * @version 1.0
  */
 public class HttpRequest {
-    private String method;
-    private String uri;
-    private String version;
-    private HttpHeader httpHeader;
-    private InputStream inputStream;
-    private OutputStream outputStream;
-    private byte[] data;
+    private final byte[] requestLineBytes;
+    private final byte[][] headerBytes;
+    private final byte[] contentBytes;
+    private final HttpRequestLine requestLine;
+    private final HttpRequestHeader header;
+    private final InputStream inputStream;
+    private final OutputStream outputStream;
 
-    public HttpRequest(String method, String uri, String version, HttpHeader httpHeader, byte[] data, InputStream inputStream, OutputStream outputStream) {
-        this.method = method;
-        this.uri = uri;
-        this.version = version;
-        this.httpHeader = httpHeader;
-        this.data = data;
+
+    public HttpRequest(byte[] requestLineBytes, byte[][] headerBytes, byte[] contentBytes,
+                       HttpRequestHeader httpHeader, InputStream inputStream, OutputStream outputStream) {
+        String[] split = new String(requestLineBytes).split(" ");
+        this.requestLine = new HttpRequestLine(split[0], split[1], split[3]);
+        this.requestLineBytes = requestLineBytes;
+        this.headerBytes = headerBytes;
+        this.contentBytes = contentBytes;
+        this.header = httpHeader;
         this.inputStream = inputStream;
         this.outputStream = outputStream;
     }
 
-    public String getMethod() {
-        return method;
+    public HttpRequestLine getRequestLine() {
+        return requestLine;
     }
 
-    public String getUri() {
-        return uri;
+    public byte[] getRequestLineBytes() {
+        return requestLineBytes;
     }
 
-    public String getVersion() {
-        return version;
+    public byte[][] getHeaderBytes() {
+        return headerBytes;
     }
 
-    public HttpHeader getHttpHeader() {
-        return httpHeader;
+    public byte[] getContentBytes() {
+        return contentBytes;
     }
 
-    public byte[] getData() {
-        return data;
+    public HttpRequestHeader getHeader() {
+        return header;
     }
 
     public InputStream getInputStream() {

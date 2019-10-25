@@ -11,7 +11,30 @@ import java.util.concurrent.Executors;
  * @author mzhong
  * @version 1.0
  */
-public class KBus {
+public class KBus implements Reloadable, Startable {
+    public final static String VERSION = "1.0";
+
+    /*----------------------基准配置 start*/
+    private int bufferSize = 4096;
+    private IOType io = IOType.BIO;
+
+    public int getBufferSize() {
+        return bufferSize;
+    }
+
+    public void setBufferSize(int bufferSize) {
+        this.bufferSize = bufferSize;
+    }
+
+    public IOType getIo() {
+        return io;
+    }
+
+    public void setIo(IOType io) {
+        this.io = io;
+    }
+    /*----------------------基准配置 end*/
+
     /**
      * 临时使用这个，后面可能换创建实例的方式
      */
@@ -19,16 +42,7 @@ public class KBus {
 
     private final Http http = new Http(this);
 
-    private Config config;
-
     private SocketPool socketPool = new SocketPool();
-
-    public KBus() {
-    }
-
-    public KBus(Config config) {
-        this.config = config;
-    }
 
     public ExecutorService getExecutor() {
         return executor;
@@ -42,39 +56,13 @@ public class KBus {
         return socketPool;
     }
 
-    public Config getConfig() {
-        return config;
-    }
-
-    public void setConfig(Config config) {
-        this.config = config;
-    }
-
+    @Override
     public void start() {
-        if (this.config == null) {
-            this.config = new Config();
-        }
         http.start();
     }
 
-    public static class Config {
-        private int bufferSize = 4096;
-        private IOType io = IOType.BIO;
-
-        public int getBufferSize() {
-            return bufferSize;
-        }
-
-        public void setBufferSize(int bufferSize) {
-            this.bufferSize = bufferSize;
-        }
-
-        public IOType getIo() {
-            return io;
-        }
-
-        public void setIo(IOType io) {
-            this.io = io;
-        }
+    @Override
+    public void reload() {
+        http.reload();
     }
 }

@@ -7,7 +7,7 @@ package cn.mzhong.kbus.http;
  * @author mzhong
  * @version 1.0
  */
-public class HttpHeader {
+public class HttpRequestHeader {
 
     private String host;
 

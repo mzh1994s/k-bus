@@ -13,16 +13,14 @@ import cn.mzhong.kbus.http.Server;
  */
 public class HttpTest {
     public static void main(String[] args) {
-        KBus.Config config = new KBus.Config();
-        config.setBufferSize(8192);
-        KBus bus = new KBus(config);
+        KBus bus = new KBus();
+        bus.setBufferSize(8192);
         Server server = bus.getHttp().createServer();
         server.setListen(9001);
-        Location location = new Location();
+        Location location = server.createLocation();
         location.setValue("/");
         location.setProxyPass("http://www.neea.edu.cn/");
         location.setProxyPass("http://www.cqksy.cn/");
-        server.addLocation(location);
         bus.start();
     }
 }

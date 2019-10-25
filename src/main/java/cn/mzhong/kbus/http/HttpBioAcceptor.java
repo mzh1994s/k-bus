@@ -1,13 +1,13 @@
 package cn.mzhong.kbus.http;
 
 import cn.mzhong.kbus.core.KBus;
+import cn.mzhong.kbus.http.conf.ChunkedTransferEncoding;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.URL;
 import java.util.concurrent.ExecutorService;
 
 /**
@@ -32,11 +32,11 @@ public class HttpBioAcceptor extends AbstractHttpAcceptor {
         KBus bus = server.getHttp().getBus();
         this.executor = bus.getExecutor();
         this.serverSocket = new ServerSocket(server.getListen());
-        this.bufferSize = bus.getConfig().getBufferSize();
-        this.connect();
+        this.bufferSize = bus.getBufferSize();
+        this.start();
     }
 
-    public void connect() {
+    private void start() {
         this.executor.execute(() -> {
             while (true) {
                 try {
@@ -64,25 +64,27 @@ public class HttpBioAcceptor extends AbstractHttpAcceptor {
         });
     }
 
-    private HttpConnector selectConnector() {
-        return new HttpBioConnector(server);
+    private HttpConnector createConnector(Location location) {
+        AbstractHttpConnector connector = new HttpBioConnector(server);
+        connector.setFirstLineWriter(new HttpFirstLineWriter());
+        if (location.getChunkedTransferEncoding() == ChunkedTransferEncoding.ON) {
+
+        }
+        return connector;
     }
 
     private void acceptInternal(Socket socket) throws IOException {
-        socket.setSoTimeout(1500);
+        socket.setSoTimeout(server.getTimeout());
         HttpLog httpLog = new HttpLog();
         HttpLog.threadLocal.set(httpLog);
-        HttpBioParser parser = new HttpBioParser(socket, bufferSize);
+        HttpBioRequestReader requestReader = new HttpBioRequestReader(socket, bufferSize);
         HttpRequest httpRequest;
-        while ((httpRequest = parser.next()) != null) {
-            HttpConnector connector = selectConnector();
-            Location location = HttpUriLocationMatcher.match(server.getLocations(), httpRequest.getUri());
+        while ((httpRequest = requestReader.next()) != null) {
+            Location location = HttpUriLocationMatcher.match(server.getLocations(), httpRequest.getRequestLine().getUri());
             if (location != null) {
-                String proxyPass = location.getProxyPass();
-                URL url = new URL(proxyPass);
-                int port = url.getPort();
+                HttpConnector connector = this.createConnector(location);
                 try {
-                    connector.connect(httpRequest, url.getHost(), port == -1 ? 80 : port);
+                    connector.connect(httpRequest, location);
                 } catch (Exception ignored) {
                     socket.close();
                     break;

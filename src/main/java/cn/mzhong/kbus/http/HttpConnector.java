@@ -1,11 +1,9 @@
 package cn.mzhong.kbus.http;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 
 /**
- * TODO<br>
+ * 上游连接器，在实现此接口时必须保证对象是线程安全的<br>
  * 创建时间： 2019/10/22 10:04
  *
  * @author mzhong
@@ -13,5 +11,5 @@ import java.io.OutputStream;
  */
 public interface HttpConnector {
 
-    void connect(HttpRequest request, String host, int port) throws IOException;
+    void connect(HttpRequest request, Location location) throws IOException;
 }

@@ -47,6 +47,23 @@ public class StreamUtils {
         }
     }
 
+    public static byte[] read(InputStream inputStream, int bufferSize, int length) throws IOException {
+        if (length <= 0) {
+            return null;
+        }
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream(length);
+        int read, len = 0;
+        byte[] buf = new byte[bufferSize];
+        while ((read = inputStream.read(buf)) != -1) {
+            outputStream.write(buf);
+            len += read;
+            if (len >= length) {
+                break;
+            }
+        }
+        return outputStream.toByteArray();
+    }
+
     /**
      * 读取一行，并且将原始数据写入outputStream
      *
@@ -88,6 +105,38 @@ public class StreamUtils {
             previous = read;
         }
         return new String(lineStream.toByteArray());
+    }
+
+    public static byte[] readLine(InputStream inputStream) throws IOException {
+
+        // 当第一次读取就是-1的话，证明输入流数据已经读取完毕，返回null
+        int read = inputStream.read();
+        if (read == -1) {
+            return null;
+        }
+        // 记录上一个字符，与read变量两个同事确定是否结尾是\r\n
+        int previous = read;
+        // 行数据流，每读一个字符就写一个字符，当遇到换行时终止，最终行数据流就是这一行的数据
+        // 使用BufferedReader可以更好的实现此功能，但是为了保证性能，这里手动实现
+        ByteArrayOutputStream lineStream = new ByteArrayOutputStream();
+        // 写行流，只写出了换行符之外的数据
+        if (read != '\r' && read != '\n') {
+            lineStream.write(read);
+        }
+
+        // 上面是读取第一个字符，这里读取所有
+        while ((read = inputStream.read()) != -1) {
+            // 写行流，不写换行符
+            if (read != '\r' && read != '\n') {
+                lineStream.write(read);
+            }
+            // 一行
+            if (previous == '\r' && read == '\n') {
+                break;
+            }
+            previous = read;
+        }
+        return lineStream.toByteArray();
     }
 }
 

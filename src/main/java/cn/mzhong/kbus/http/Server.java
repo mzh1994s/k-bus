@@ -1,6 +1,9 @@
 package cn.mzhong.kbus.http;
 
 import cn.mzhong.kbus.core.IOType;
+import cn.mzhong.kbus.core.Reloadable;
+import cn.mzhong.kbus.core.Startable;
+import cn.mzhong.kbus.http.conf.ChunkedTransferEncoding;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -13,7 +16,10 @@ import java.util.Set;
  * @author mzhong
  * @version 1.0
  */
-public class Server {
+public class Server implements Startable, Reloadable {
+
+    /**------------------------基准配置项 start*/
+
     /**
      * 监听的端口
      */
@@ -22,20 +28,20 @@ public class Server {
      * 绑定的域名
      */
     private String serverName;
-
-    private IOType ioType;
     /**
-     * 等同于nginx的Location
+     * IO类型
      */
-    private Set<Location> locations = new HashSet<>();
+    private IOType io;
 
-    private Http http;
+    /**
+     * 连接超时时间（上游）
+     */
+    private int timeout = 1500;
 
-    private HttpAcceptor acceptor;
-
-    Server(Http http) {
-        this.http = http;
-    }
+    /**
+     * 默认值取{@link Http#getChunkedTransferEncoding()}
+     */
+    private ChunkedTransferEncoding chunkedTransferEncoding;
 
     public int getListen() {
         return listen;
@@ -53,12 +59,58 @@ public class Server {
         this.serverName = serverName;
     }
 
+    public int getTimeout() {
+        return timeout;
+    }
+
+    public ChunkedTransferEncoding getChunkedTransferEncoding() {
+        return chunkedTransferEncoding;
+    }
+
+    public Server setChunkedTransferEncoding(ChunkedTransferEncoding chunkedTransferEncoding) {
+        this.config.chunkedTransferEncoding = chunkedTransferEncoding;
+        return this;
+    }
+
+    /**
+     * ------------------------基准配置项 end
+     */
+
+    private Config config = new Config();
+
+    /**
+     * 等同于nginx的Location
+     */
+    private Set<Location> locations = new HashSet<>();
+
+    private Http http;
+
+    private HttpAcceptor acceptor;
+
+    Server(Http http) {
+        this.http = http;
+    }
+
+    public Set<Location> getLocations() {
+        return locations;
+    }
+
+    public Location createLocation() {
+        Location location = new Location(this);
+        this.locations.add(location);
+        return location;
+    }
+
     public Http getHttp() {
         return http;
     }
 
+    @Override
     public void start() {
-        this.acceptor = HttpAcceptor.getInstance(ioType);
+        for (Location location : this.locations) {
+            location.start();
+        }
+        this.acceptor = HttpAcceptor.getInstance(io);
         try {
             this.acceptor.start(this);
         } catch (IOException e) {
@@ -66,12 +118,13 @@ public class Server {
         }
     }
 
-    public Set<Location> getLocations() {
-        return locations;
+    @Override
+    public void reload() {
+        this.chunkedTransferEncoding = this.config.chunkedTransferEncoding == null ?
+                http.getChunkedTransferEncoding() : this.config.chunkedTransferEncoding;
     }
 
-    public Server addLocation(Location location) {
-        this.locations.add(location);
-        return this;
+    private static class Config {
+        private ChunkedTransferEncoding chunkedTransferEncoding;
     }
 }

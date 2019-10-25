@@ -2,15 +2,12 @@ package cn.mzhong.kbus.http;
 
 import cn.mzhong.kbus.core.KBus;
 import cn.mzhong.kbus.core.SocketPool;
+import cn.mzhong.kbus.http.header.Connection;
 import cn.mzhong.kbus.util.StreamUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
-import java.util.concurrent.ExecutorService;
 
 /**
  * TODO<br>
@@ -19,44 +16,42 @@ import java.util.concurrent.ExecutorService;
  * @author mzhong
  * @version 1.0
  */
-public class HttpBioConnector implements HttpConnector {
+public class HttpBioConnector extends AbstractHttpConnector {
 
-    private final static Logger log = LoggerFactory.getLogger(HttpBioConnector.class);
-
+    private Server server;
     private SocketPool socketPool;
-    private ExecutorService executor;
     private int bufferSize;
 
     HttpBioConnector(Server server) {
+        this.server = server;
         KBus bus = server.getHttp().getBus();
         this.socketPool = bus.getSocketPool();
-        this.executor = bus.getExecutor();
-        this.bufferSize = bus.getConfig().getBufferSize();
+        this.bufferSize = bus.getBufferSize();
     }
 
     @Override
-    public void connect(HttpRequest request, String host, int port) throws IOException {
+    public void connect(HttpRequest request, Location location) throws IOException {
+        String host = location.getHost();
+        int port = location.getPort();
         HttpLog httpLog = HttpLog.threadLocal.get();
-        boolean isKeepAlive = false;
+        Connection connection = Connection.CLOSE;
         Socket socket = null;
-        InputStream socketIn;
-        OutputStream socketOut;
         try {
             httpLog.start();
             socket = socketPool.getSocket(host, port);
             httpLog.saveConnectExpand();
 
             httpLog.start();
-            socketIn = socket.getInputStream();
-            socketOut = socket.getOutputStream();
+            HttpUpstream upstream = new HttpUpstream(socket);
             OutputStream sourceOut = request.getOutputStream();
 
             // 向目标服务器写入客户端传过来的请求头数据
-            socketOut.write(request.getData());
-            socketOut.flush();
+            firstLineWriter.write(request, upstream, location);
+            headerWriter.write(request, upstream, location);
+            contentWriter.write(request, upstream, location);
 
             // 写完后就可以读取目标服务器响应的数据了
-            String line;
+
             int contentLength = 0;
             boolean isTransferEncoding = false;
 
@@ -66,20 +61,24 @@ public class HttpBioConnector implements HttpConnector {
                 httpLog.setResponseLine(firstLine);
                 String[] head = firstLine.split(" ");
                 // HTTP/1.1 默认keepAlive为true
-                isKeepAlive = "HTTP/1.1".equals(head[0]);
+                connection = "HTTP/1.1".equals(head[0]) ? Connection.KEEP_ALIVE : Connection.CLOSE;
             } else {
                 throw new IOException();
             }
 
             // 读header
-            while ((line = StreamUtils.readLineAndWrite(socketIn, sourceOut)) != null) {
-                if (line.startsWith("Transfer-Encoding: ")) {
+            byte[] lineBytes;
+            while ((lineBytes = StreamUtils.readLine(socketIn)) != null) {
+                String line = new String(lineBytes);
+                if (line.startsWith(HttpConstant.HEADER_PREFIX_TRANSFER_ENCODING)) {
                     isTransferEncoding = true;
-                } else if (line.startsWith("Content-Length: ")) {
-                    contentLength = Integer.parseInt(line.substring(16));
-                } else if (line.startsWith("Connection: ")) {
-                    isKeepAlive = !"close".equals(line.substring(12));
+                } else if (line.startsWith(HttpConstant.HEADER_PREFIX_CONTENT_LENGTH)) {
+                    contentLength = Integer.parseInt(line.substring(HttpConstant.HEADER_PREFIX_CONTENT_LENGTH.length()));
+                } else if (line.startsWith(HttpConstant.HEADER_PREFIX_CONNECTION)) {
+                    connection = Connection.valueOfString(line.substring(HttpConstant.HEADER_PREFIX_CONNECTION.length()));
                 }
+                sourceOut.write(lineBytes);
+                sourceOut.write(HttpConstant.LINE_SEPARATOR);
                 if (line.isEmpty()) {
                     break;
                 }
@@ -114,10 +113,13 @@ public class HttpBioConnector implements HttpConnector {
             }
             sourceOut.flush();
         } catch (Exception e) {
+            connection = Connection.CLOSE;
             throw new IOException(e);
         } finally {
             if (socket != null) {
-                if (!isKeepAlive) {
+                if (connection == Connection.CLOSE) {
+                    socket.shutdownInput();
+                    socket.shutdownOutput();
                     socket.close();
                 }
                 socketPool.returnSocket(socket);
@@ -125,6 +127,4 @@ public class HttpBioConnector implements HttpConnector {
             httpLog.saveResponseExpand();
         }
     }
-
-
 }
