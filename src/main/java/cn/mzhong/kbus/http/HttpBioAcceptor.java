@@ -1,7 +1,6 @@
 package cn.mzhong.kbus.http;
 
 import cn.mzhong.kbus.core.KBus;
-import cn.mzhong.kbus.http.conf.ChunkedTransferEncoding;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,10 +65,8 @@ public class HttpBioAcceptor extends AbstractHttpAcceptor {
 
     private HttpConnector createConnector(Location location) {
         AbstractHttpConnector connector = new HttpBioConnector(server);
-        connector.setFirstLineWriter(new HttpFirstLineWriter());
-        if (location.getChunkedTransferEncoding() == ChunkedTransferEncoding.ON) {
-
-        }
+        connector.setRequestWriter(new SimpleHttpRequestWriter());
+        connector.setResponseWriter(new SimpleHttpResponseWriter());
         return connector;
     }
 
@@ -77,14 +74,16 @@ public class HttpBioAcceptor extends AbstractHttpAcceptor {
         socket.setSoTimeout(server.getTimeout());
         HttpLog httpLog = new HttpLog();
         HttpLog.threadLocal.set(httpLog);
-        HttpBioRequestReader requestReader = new HttpBioRequestReader(socket, bufferSize);
+        HttpDownStream downStream = new HttpDownStream(socket);
+        HttpBioRequestReader requestReader = new HttpBioRequestReader(downStream, bufferSize);
         HttpRequest httpRequest;
         while ((httpRequest = requestReader.next()) != null) {
             Location location = HttpUriLocationMatcher.match(server.getLocations(), httpRequest.getRequestLine().getUri());
             if (location != null) {
+                httpLog.setRequestLine(httpRequest.getRequestLine().getLine());
                 HttpConnector connector = this.createConnector(location);
                 try {
-                    connector.connect(httpRequest, location);
+                    connector.connect(downStream, httpRequest, location);
                 } catch (Exception ignored) {
                     socket.close();
                     break;

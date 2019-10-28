@@ -11,9 +11,11 @@ public enum Connection {
     }
 
     public static Connection valueOfString(String value) {
-        for (Connection connection : Connection.values()) {
-            if (connection.value.equals(value)) {
-                return connection;
+        if (value != null) {
+            for (Connection connection : Connection.values()) {
+                if (connection.value.equals(value)) {
+                    return connection;
+                }
             }
         }
         return null;

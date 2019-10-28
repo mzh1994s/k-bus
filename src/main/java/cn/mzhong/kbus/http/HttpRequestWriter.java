@@ -2,7 +2,7 @@ package cn.mzhong.kbus.http;
 
 import java.io.IOException;
 
-public interface HttpWriter {
+public interface HttpRequestWriter {
 
     void write(HttpRequest httpRequest, HttpUpstream httpUpstream, Location location) throws IOException;
 }

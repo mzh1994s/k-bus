@@ -11,5 +11,5 @@ import java.io.IOException;
  */
 public interface HttpConnector {
 
-    void connect(HttpRequest request, Location location) throws IOException;
+    void connect(HttpDownStream downStream, HttpRequest request, Location location) throws IOException;
 }

@@ -1,12 +1,9 @@
 package cn.mzhong.kbus.http;
 
-import cn.mzhong.kbus.util.ArrayUtils;
 import cn.mzhong.kbus.util.StreamUtils;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.Socket;
 
 /**
  * TODO<br>
@@ -17,63 +14,49 @@ import java.net.Socket;
  */
 public class HttpBioRequestReader {
 
-    private Socket socket;
-    private boolean isKeepAlive = false;
+    private HttpDownStream downStream;
     private int bufferSize;
     private HttpLog httpLog;
+    private InputStream inputStream;
 
-    HttpBioRequestReader(Socket socket, int bufferSize) {
-        this.socket = socket;
+    HttpBioRequestReader(HttpDownStream downStream, int bufferSize) throws IOException {
+        this.downStream = downStream;
+        this.inputStream = downStream.getInputStream();
         this.bufferSize = bufferSize;
         this.httpLog = HttpLog.threadLocal.get();
     }
 
     public HttpRequest next() {
-        if (socket.isClosed()) {
+        if (downStream.isClosed()) {
             return null;
         }
         this.httpLog.start();
         try {
-            InputStream inputStream = socket.getInputStream();
-            OutputStream outputStream = socket.getOutputStream();
-
             // 读第一行
-            byte[] firstLine = StreamUtils.readLine(inputStream);
-
+            byte[] requestLineBytes = StreamUtils.readLine(inputStream);
+            if (requestLineBytes == null) {
+                return null;
+            }
+            HttpRequestLine requestLine = HttpRequestLine.parse(requestLineBytes);
             // 读header
-            HttpRequestHeader httpHeader = new HttpRequestHeader();
-            byte[][] headers = new byte[0][];
+            HttpHeader header = new HttpHeader();
             byte[] lineBytes;
             while ((lineBytes = StreamUtils.readLine(inputStream)) != null) {
-                String line = new String(lineBytes);
-                if (line.startsWith("Host: ")) {
-                    httpHeader.setHost(line.substring(6));
-                    line = "Host: www.cqksy.cn";
-                } else if (line.startsWith("Content-Length: ")) {
-                    httpHeader.setContentLength(Integer.parseInt(line.substring(16)));
-                } else if (line.startsWith("Connection: ")) {
-                    isKeepAlive = "keep-alive".equals(line.substring(12));
-                }
                 // 空行判断
-                if (line.isEmpty()) {
+                if (lineBytes.length == 0) {
                     break;
                 }
-                headers = ArrayUtils.add(headers, lineBytes);
+                header.add(lineBytes);
             }
-
             // 读内容
-            byte[] content = StreamUtils.read(inputStream, bufferSize, httpHeader.getContentLength());
-
-            return new HttpRequest(firstLine, headers, content, httpHeader, inputStream, outputStream);
+            int contentLength = header.getIntValue(HttpHeader.CONTENT_LENGTH);
+            byte[] content = StreamUtils.read(inputStream, bufferSize, contentLength);
+            // 返回请求体
+            return new HttpRequest(requestLine, header, content);
         } catch (Exception e) {
+            e.printStackTrace();
             return null;
         } finally {
-            if (!isKeepAlive) {
-                try {
-                    socket.close();
-                } catch (IOException ignored) {
-                }
-            }
             this.httpLog.saveRequestExpand();
         }
     }

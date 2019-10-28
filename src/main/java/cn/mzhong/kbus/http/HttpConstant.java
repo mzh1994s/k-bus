@@ -19,6 +19,8 @@ public class HttpConstant {
 
     public final static byte[] LINE_SEPARATOR = {'\r', '\n'};
 
+    public final static String HTTP_1_1 = "HTTP/1.1";
+
     private HttpConstant() {
     }
 
