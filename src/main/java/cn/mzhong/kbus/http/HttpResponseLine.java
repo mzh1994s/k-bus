@@ -48,9 +48,9 @@ public class HttpResponseLine {
 
     public static HttpResponseLine parse(byte[] lineBytes) throws IOException {
         HttpResponseLine responseLine = new HttpResponseLine();
-        responseLine.lineBytes = lineBytes;
         if (lineBytes != null) {
             String line = new String(lineBytes);
+            responseLine.lineBytes = lineBytes;
             responseLine.line = line;
             // 读version
             int index = line.indexOf(' ');

@@ -50,7 +50,7 @@ public class HttpBioRequestReader {
             }
             // 读内容
             int contentLength = header.getIntValue(HttpHeader.CONTENT_LENGTH);
-            byte[] content = StreamUtils.read(inputStream, bufferSize, contentLength);
+            byte[] content = StreamUtils.read(inputStream, contentLength);
             // 返回请求体
             return new HttpRequest(requestLine, header, content);
         } catch (Exception e) {

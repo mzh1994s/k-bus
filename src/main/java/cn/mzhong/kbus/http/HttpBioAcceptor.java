@@ -1,6 +1,7 @@
 package cn.mzhong.kbus.http;
 
 import cn.mzhong.kbus.core.KBus;
+import cn.mzhong.kbus.http.conf.ChunkedTransferEncoding;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,7 +67,11 @@ public class HttpBioAcceptor extends AbstractHttpAcceptor {
     private HttpConnector createConnector(Location location) {
         AbstractHttpConnector connector = new HttpBioConnector(server);
         connector.setRequestWriter(new SimpleHttpRequestWriter());
-        connector.setResponseWriter(new SimpleHttpResponseWriter());
+        if (location.getChunkedTransferEncoding() == ChunkedTransferEncoding.ON) {
+            connector.setResponseWriter(new SimpleHttpResponseWriter());
+        } else {
+            connector.setResponseWriter(new OffChunkedTransferEncodingHttpResponseWriter());
+        }
         return connector;
     }
 

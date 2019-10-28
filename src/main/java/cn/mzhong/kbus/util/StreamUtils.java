@@ -32,35 +32,28 @@ public class StreamUtils {
         outputStream.flush();
     }
 
-    public static void copy(InputStream inputStream, OutputStream outputStream, int bufferSize, int length) throws IOException {
+    public static void copyAt(InputStream inputStream, OutputStream outputStream, int length) throws IOException {
         if (length <= 0) {
             return;
         }
-        int read, len = 0;
-        byte[] buf = new byte[bufferSize];
-        while ((read = inputStream.read(buf)) != -1) {
-            outputStream.write(buf, 0, read);
-            len += read;
-            if (len >= length) {
+        int read, target = length;
+        while (target > 0) {
+            byte[] buf = new byte[target];
+            if ((read = inputStream.read(buf)) != -1) {
+                outputStream.write(buf, 0, read);
+                target -= read;
+            } else {
                 break;
             }
         }
     }
 
-    public static byte[] read(InputStream inputStream, int bufferSize, int length) throws IOException {
+    public static byte[] read(InputStream inputStream, int length) throws IOException {
         if (length <= 0) {
             return null;
         }
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream(length);
-        int read, len = 0;
-        byte[] buf = new byte[bufferSize];
-        while ((read = inputStream.read(buf)) != -1) {
-            outputStream.write(buf);
-            len += read;
-            if (len >= length) {
-                break;
-            }
-        }
+        copyAt(inputStream, outputStream, length);
         return outputStream.toByteArray();
     }
 

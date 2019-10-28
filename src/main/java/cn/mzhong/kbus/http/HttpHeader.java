@@ -45,6 +45,11 @@ public class HttpHeader {
         return this;
     }
 
+    public HttpHeader remove(String key) {
+        data.remove(key);
+        return this;
+    }
+
     public boolean contains(String key) {
         return data.containsKey(key);
     }

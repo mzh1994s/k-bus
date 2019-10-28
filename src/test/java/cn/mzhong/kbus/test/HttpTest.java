@@ -3,6 +3,7 @@ package cn.mzhong.kbus.test;
 import cn.mzhong.kbus.core.KBus;
 import cn.mzhong.kbus.http.Location;
 import cn.mzhong.kbus.http.Server;
+import cn.mzhong.kbus.http.conf.ChunkedTransferEncoding;
 
 /**
  * TODO<br>
@@ -21,6 +22,7 @@ public class HttpTest {
         location.setValue("/");
 //        location.setProxyPass("http://www.neea.edu.cn/");
         location.setProxyPass("http://www.cqksy.cn/");
+        location.setChunkedTransferEncoding(ChunkedTransferEncoding.OFF);
         bus.start();
     }
 }

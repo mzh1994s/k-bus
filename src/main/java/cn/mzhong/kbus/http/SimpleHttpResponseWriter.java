@@ -20,7 +20,8 @@ public class SimpleHttpResponseWriter implements HttpResponseWriter {
         OutputStream outputStream = downStream.getOutputStream();
         //-------------- 写响应行 --------------
         outputStream.write(response.getResponseLine().getLineBytes());
-        
+        outputStream.write(HttpConstant.LINE_SEPARATOR);
+
         //-------------- 写响应header --------------
         HttpHeader header = response.getHeader();
         outputStream.write(header.toBytes());
@@ -55,7 +56,7 @@ public class SimpleHttpResponseWriter implements HttpResponseWriter {
                 eof[3] = eof[4];
             }
         } else if (contentLength != null && contentLength > 0) {
-            StreamUtils.copy(upstreamIn, outputStream, 8192, contentLength);
+            StreamUtils.copyAt(upstreamIn, outputStream, contentLength);
         }
         outputStream.flush();
     }
