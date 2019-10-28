@@ -76,7 +76,7 @@ public class HttpBioAcceptor extends AbstractHttpAcceptor {
     }
 
     private void acceptInternal(Socket socket) throws IOException {
-        socket.setSoTimeout(server.getTimeout());
+//        socket.setSoTimeout(server.getTimeout());
         HttpLog httpLog = new HttpLog();
         HttpLog.threadLocal.set(httpLog);
         HttpDownStream downStream = new HttpDownStream(socket);

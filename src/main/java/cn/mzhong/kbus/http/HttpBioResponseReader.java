@@ -17,6 +17,9 @@ public class HttpBioResponseReader {
     public HttpResponse read(InputStream inputStream) throws IOException {
         // 读取报文头
         byte[] responseLineBytes = StreamUtils.readLine(inputStream);
+        if (responseLineBytes == null) {
+            throw new IOEOFException();
+        }
         HttpResponseLine responseLine = HttpResponseLine.parse(responseLineBytes);
         // 读header
         HttpHeader header = new HttpHeader();
