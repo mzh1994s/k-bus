@@ -1,5 +1,9 @@
-package cn.mzhong.kbus.http;
+package cn.mzhong.kbus.http.bio;
 
+import cn.mzhong.kbus.http.HttpHeader;
+import cn.mzhong.kbus.http.HttpResponse;
+import cn.mzhong.kbus.http.HttpResponseLine;
+import cn.mzhong.kbus.http.IOEOFException;
 import cn.mzhong.kbus.util.StreamUtils;
 
 import java.io.IOException;

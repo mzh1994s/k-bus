@@ -1,4 +1,4 @@
-package cn.mzhong.kbus.core;
+package cn.mzhong.kbus.http.bio;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * TODO<br>
@@ -20,9 +21,9 @@ public class SocketPool {
     Map<String, BlockingQueue<Socket>> poolMap = new HashMap<>();
 
     private int max = 30;
-    private int num = 0;
+    private AtomicInteger num = new AtomicInteger();
 
-    public synchronized Socket getSocket(String host, int port) throws InterruptedException, IOException {
+    public Socket get(String host, int port) throws IOException {
         String key = host + ":" + port;
         BlockingQueue<Socket> pool = poolMap.get(key);
         if (pool == null) {
@@ -31,27 +32,38 @@ public class SocketPool {
         }
         Socket socket;
         while (!pool.isEmpty()) {
-            socket = pool.take();
-            if (!socket.isClosed()) {
+            try {
+                socket = pool.take();
+            } catch (InterruptedException e) {
+                throw new IOException(e);
+            }
+            if (!socket.isClosed() && !socket.isInputShutdown() && !socket.isOutputShutdown()) {
                 return socket;
             }
-            num--;
+            num.getAndDecrement();
         }
 
-        if (num < max) {
+        if (num.get() < max) {
+            long start = System.currentTimeMillis();
             socket = new Socket(host, port);
-            num++;
+            System.out.println("创建用时：" + (System.currentTimeMillis() - start));
+            num.getAndIncrement();
             return socket;
         }
-        socket = pool.take();
+        try {
+            socket = pool.take();
+        } catch (InterruptedException e) {
+            throw new IOException(e);
+        }
         if (socket.isClosed()) {
-            num--;
-            return getSocket(host, port);
+            num.getAndDecrement();
+            return get(host, port);
         }
         return socket;
     }
 
-    public synchronized void returnSocket(Socket socket) {
+    public void back(Socket socket) {
+        long start = System.currentTimeMillis();
         InetSocketAddress socketAddress = (InetSocketAddress) socket.getRemoteSocketAddress();
         if (socketAddress != null && !socket.isClosed()) {
             try {
@@ -59,7 +71,8 @@ public class SocketPool {
             } catch (Exception ignored) {
             }
         } else {
-            num--;
+            num.getAndDecrement();
         }
+        System.out.println("归还用时：" + (System.currentTimeMillis() - start));
     }
 }

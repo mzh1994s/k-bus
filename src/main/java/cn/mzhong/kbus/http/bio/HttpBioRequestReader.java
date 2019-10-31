@@ -1,5 +1,9 @@
-package cn.mzhong.kbus.http;
+package cn.mzhong.kbus.http.bio;
 
+import cn.mzhong.kbus.http.HttpHeader;
+import cn.mzhong.kbus.http.HttpLog;
+import cn.mzhong.kbus.http.HttpRequest;
+import cn.mzhong.kbus.http.HttpRequestLine;
 import cn.mzhong.kbus.util.StreamUtils;
 
 import java.io.IOException;
@@ -14,12 +18,12 @@ import java.io.InputStream;
  */
 public class HttpBioRequestReader {
 
-    private HttpDownStream downStream;
+    private HttpBioDownStream downStream;
     private int bufferSize;
     private HttpLog httpLog;
     private InputStream inputStream;
 
-    HttpBioRequestReader(HttpDownStream downStream, int bufferSize) throws IOException {
+    HttpBioRequestReader(HttpBioDownStream downStream, int bufferSize) throws IOException {
         this.downStream = downStream;
         this.inputStream = downStream.getInputStream();
         this.bufferSize = bufferSize;
@@ -30,13 +34,13 @@ public class HttpBioRequestReader {
         if (downStream.isClosed()) {
             return null;
         }
-        this.httpLog.start();
         try {
             // 读第一行
             byte[] requestLineBytes = StreamUtils.readLine(inputStream);
             if (requestLineBytes == null) {
                 return null;
             }
+            this.httpLog.start();
             HttpRequestLine requestLine = HttpRequestLine.parse(requestLineBytes);
             // 读header
             HttpHeader header = new HttpHeader();
@@ -48,13 +52,9 @@ public class HttpBioRequestReader {
                 }
                 header.add(lineBytes);
             }
-            // 读内容
-            int contentLength = header.getIntValue(HttpHeader.CONTENT_LENGTH);
-            byte[] content = StreamUtils.read(inputStream, contentLength);
             // 返回请求体
-            return new HttpRequest(requestLine, header, content);
+            return new HttpBioRequest(requestLine, header, inputStream);
         } catch (Exception e) {
-            e.printStackTrace();
             return null;
         } finally {
             this.httpLog.saveRequestExpand();

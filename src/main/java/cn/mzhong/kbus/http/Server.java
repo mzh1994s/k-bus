@@ -59,6 +59,14 @@ public class Server implements Startable, Reloadable {
         this.serverName = serverName;
     }
 
+    public IOType getIo() {
+        return io;
+    }
+
+    public void setIo(IOType io) {
+        this.io = io;
+    }
+
     public int getTimeout() {
         return timeout;
     }

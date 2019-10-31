@@ -1,4 +1,12 @@
-package cn.mzhong.kbus.http;
+package cn.mzhong.kbus.http.bio;
+
+import cn.mzhong.kbus.http.HttpConstant;
+import cn.mzhong.kbus.http.HttpHeader;
+import cn.mzhong.kbus.http.Location;
+import cn.mzhong.kbus.http.bio.HttpBioRequest;
+import cn.mzhong.kbus.http.bio.HttpBioRequestWriter;
+import cn.mzhong.kbus.http.bio.HttpBioUpstream;
+import cn.mzhong.kbus.util.StreamUtils;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -10,10 +18,10 @@ import java.io.OutputStream;
  * @author mzhong
  * @version 1.0
  */
-public class SimpleHttpRequestWriter implements HttpRequestWriter {
+public class SimpleHttpBioRequestWriter implements HttpBioRequestWriter {
 
     @Override
-    public void write(HttpRequest httpRequest, HttpUpstream httpUpstream, Location location) throws IOException {
+    public void write(HttpBioRequest httpRequest, HttpBioUpstream httpUpstream, Location location) throws IOException {
         OutputStream outputStream = httpUpstream.getOutputStream();
         // 写请求行
         outputStream.write(httpRequest.getRequestLine().getLineBytes());
@@ -25,10 +33,8 @@ public class SimpleHttpRequestWriter implements HttpRequestWriter {
         // 空行
         outputStream.write(HttpConstant.LINE_SEPARATOR);
         // 请求头体
-        byte[] contentBytes = httpRequest.getContent();
-        if (contentBytes != null) {
-            outputStream.write(contentBytes);
-        }
+        int contentLength = header.getIntValue(HttpHeader.CONTENT_LENGTH);
+        StreamUtils.copyAt(httpRequest.getInputStream(), outputStream, contentLength);
         outputStream.flush();
     }
 }

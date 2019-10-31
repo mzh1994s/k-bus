@@ -1,5 +1,7 @@
 package cn.mzhong.kbus.http;
 
+import cn.mzhong.kbus.http.bio.HttpBioDownStream;
+
 import java.io.IOException;
 
 /**
@@ -11,5 +13,5 @@ import java.io.IOException;
  */
 public interface HttpConnector {
 
-    void connect(HttpDownStream downStream, HttpRequest request, Location location) throws IOException;
+    void connect(HttpBioDownStream downStream, HttpRequest request, Location location) throws IOException;
 }

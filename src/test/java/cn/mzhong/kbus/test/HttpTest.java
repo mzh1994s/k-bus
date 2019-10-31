@@ -1,5 +1,6 @@
 package cn.mzhong.kbus.test;
 
+import cn.mzhong.kbus.core.IOType;
 import cn.mzhong.kbus.core.KBus;
 import cn.mzhong.kbus.http.Location;
 import cn.mzhong.kbus.http.Server;
@@ -18,11 +19,12 @@ public class HttpTest {
         bus.setBufferSize(8192);
         Server server = bus.getHttp().createServer();
         server.setListen(9001);
+        server.setIo(IOType.BIO);
         Location location = server.createLocation();
         location.setValue("/");
 //        location.setProxyPass("http://www.neea.edu.cn/");
-        location.setProxyPass("http://www.cqksy.cn/");
-        location.setChunkedTransferEncoding(ChunkedTransferEncoding.OFF);
+        location.setProxyPass("http://182.151.197.163:5000");
+        location.setChunkedTransferEncoding(ChunkedTransferEncoding.ON);
         bus.start();
     }
 }

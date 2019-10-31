@@ -7,7 +7,7 @@ package cn.mzhong.kbus.http;
  * @author mzhong
  * @version 1.0
  */
-class HttpLog {
+public class HttpLog {
 
     public static ThreadLocal<HttpLog> threadLocal = new ThreadLocal<>();
 

@@ -1,5 +1,9 @@
-package cn.mzhong.kbus.http;
+package cn.mzhong.kbus.http.bio;
 
+import cn.mzhong.kbus.http.HttpConstant;
+import cn.mzhong.kbus.http.HttpHeader;
+import cn.mzhong.kbus.http.HttpResponse;
+import cn.mzhong.kbus.http.Location;
 import cn.mzhong.kbus.util.StreamUtils;
 
 import java.io.IOException;
@@ -13,10 +17,10 @@ import java.io.OutputStream;
  * @author mzhong
  * @version 1.0
  */
-public class SimpleHttpResponseWriter implements HttpResponseWriter {
+public class SimpleHttpBioResponseWriter implements HttpBioResponseWriter {
 
     @Override
-    public void write(HttpUpstream upstream, HttpResponse response, HttpDownStream downStream, Location location) throws IOException {
+    public void write(HttpBioUpstream upstream, HttpResponse response, HttpBioDownStream downStream, Location location) throws IOException {
         OutputStream outputStream = downStream.getOutputStream();
         //-------------- 写响应行 --------------
         outputStream.write(response.getResponseLine().getLineBytes());
@@ -37,23 +41,23 @@ public class SimpleHttpResponseWriter implements HttpResponseWriter {
         // 一种是header中有Content-Length字段的可以直接读取Content-Length大小的数据即可
         // 还有一种响应体是分块格式的数据，用Transfer-Encoding字段辨识
         if (isTransferEncoding) {
-            // 读数据块
-            byte[] eof = new byte[5];
-            int read;
-            while ((read = upstreamIn.read()) != -1) {
-                eof[4] = (byte) read;
-                outputStream.write(eof[4]);
-                if (eof[0] == '0'
-                        && eof[1] == '\r'
-                        && eof[2] == '\n'
-                        && eof[3] == '\r'
-                        && eof[4] == '\n') {
+            byte[] bytes;
+            while ((bytes = StreamUtils.readLine(upstreamIn)) != null) {
+                outputStream.write(bytes);
+                outputStream.write(HttpConstant.LINE_SEPARATOR);
+                String line = new String(bytes);
+                int length = Integer.parseInt(line, 16);
+                if (length == 0) {
+                    StreamUtils.read(upstreamIn, 2);
+                    outputStream.write(HttpConstant.LINE_SEPARATOR);
                     break;
                 }
-                eof[0] = eof[1];
-                eof[1] = eof[2];
-                eof[2] = eof[3];
-                eof[3] = eof[4];
+                bytes = StreamUtils.read(upstreamIn, length);
+                if (bytes != null) {
+                    StreamUtils.read(upstreamIn, 2);
+                    outputStream.write(bytes);
+                }
+                outputStream.write(HttpConstant.LINE_SEPARATOR);
             }
         } else if (contentLength != null && contentLength > 0) {
             StreamUtils.copyAt(upstreamIn, outputStream, contentLength);

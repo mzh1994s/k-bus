@@ -8,14 +8,12 @@ package cn.mzhong.kbus.http;
  * @version 1.0
  */
 public class HttpRequest {
-    private final HttpRequestLine requestLine;
-    private final HttpHeader header;
-    private final byte[] content;
+    protected final HttpRequestLine requestLine;
+    protected final HttpHeader header;
 
-    public HttpRequest(HttpRequestLine requestLine, HttpHeader header, byte[] content) {
+    public HttpRequest(HttpRequestLine requestLine, HttpHeader header) {
         this.requestLine = requestLine;
         this.header = header;
-        this.content = content;
     }
 
     public HttpRequestLine getRequestLine() {
@@ -24,9 +22,5 @@ public class HttpRequest {
 
     public HttpHeader getHeader() {
         return header;
-    }
-
-    public byte[] getContent() {
-        return content;
     }
 }

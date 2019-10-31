@@ -129,6 +129,7 @@ public class StreamUtils {
             }
             previous = read;
         }
+        lineStream.flush();
         return lineStream.toByteArray();
     }
 }

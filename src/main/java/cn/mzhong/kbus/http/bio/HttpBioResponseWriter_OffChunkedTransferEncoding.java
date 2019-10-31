@@ -1,5 +1,6 @@
-package cn.mzhong.kbus.http;
+package cn.mzhong.kbus.http.bio;
 
+import cn.mzhong.kbus.http.*;
 import cn.mzhong.kbus.util.StreamUtils;
 
 import java.io.ByteArrayOutputStream;
@@ -14,10 +15,10 @@ import java.io.OutputStream;
  * @author mzhong
  * @version 1.0
  */
-public class OffChunkedTransferEncodingHttpResponseWriter implements HttpResponseWriter {
+public class HttpBioResponseWriter_OffChunkedTransferEncoding implements HttpBioResponseWriter {
 
     @Override
-    public void write(HttpUpstream upstream, HttpResponse response, HttpDownStream downStream, Location location) throws IOException {
+    public void write(HttpBioUpstream upstream, HttpResponse response, HttpBioDownStream downStream, Location location) throws IOException {
         OutputStream outputStream = downStream.getOutputStream();
         //-------------- 写响应行 --------------
         outputStream.write(response.getResponseLine().getLineBytes());

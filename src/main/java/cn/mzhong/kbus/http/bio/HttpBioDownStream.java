@@ -1,4 +1,4 @@
-package cn.mzhong.kbus.http;
+package cn.mzhong.kbus.http.bio;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -12,12 +12,12 @@ import java.net.Socket;
  * @author mzhong
  * @version 1.0
  */
-public class HttpDownStream {
+public class HttpBioDownStream {
     private Socket socket;
     private InputStream inputStream;
     private OutputStream outputStream;
 
-    public HttpDownStream(Socket socket) throws IOException {
+    public HttpBioDownStream(Socket socket) throws IOException {
         this.socket = socket;
         this.inputStream = socket.getInputStream();
         this.outputStream = socket.getOutputStream();
@@ -27,8 +27,19 @@ public class HttpDownStream {
         return socket.isClosed();
     }
 
-    public void close() throws IOException {
-        socket.close();
+    public void close() {
+        try {
+            socket.close();
+        } catch (IOException ignored) {
+        }
+        try {
+            inputStream.close();
+        } catch (IOException ignored) {
+        }
+        try {
+            outputStream.close();
+        } catch (IOException ignored) {
+        }
     }
 
     public InputStream getInputStream() {

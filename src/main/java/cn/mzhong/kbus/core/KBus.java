@@ -42,18 +42,12 @@ public class KBus implements Reloadable, Startable {
 
     private final Http http = new Http(this);
 
-    private SocketPool socketPool = new SocketPool();
-
     public ExecutorService getExecutor() {
         return executor;
     }
 
     public Http getHttp() {
         return http;
-    }
-
-    public SocketPool getSocketPool() {
-        return socketPool;
     }
 
     @Override
