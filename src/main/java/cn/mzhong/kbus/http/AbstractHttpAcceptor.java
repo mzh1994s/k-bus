@@ -1,6 +1,7 @@
 package cn.mzhong.kbus.http;
 
 import cn.mzhong.kbus.core.KBus;
+import cn.mzhong.kbus.core.KBusContext;
 
 import java.io.IOException;
 import java.util.concurrent.ExecutorService;
@@ -14,17 +15,19 @@ import java.util.concurrent.ExecutorService;
  */
 public abstract class AbstractHttpAcceptor implements HttpAcceptor {
 
-    private KBus bus;
-    private Http http;
-    private Server server;
-    private ExecutorService executor;
+    protected KBus bus;
+    protected Http http;
+    protected Server server;
+    protected ExecutorService executor;
+    protected KBusContext beanFactory;
 
     @Override
     public void start(Server server) throws IOException {
         this.http = server.getHttp();
         this.bus = this.http.getBus();
         this.server = server;
-        this.executor = this.bus.getExecutor();
+        this.beanFactory = this.bus.getContext();
+        this.executor = this.beanFactory.getExecutor();
         this.start();
     }
 
@@ -44,5 +47,9 @@ public abstract class AbstractHttpAcceptor implements HttpAcceptor {
 
     public ExecutorService getExecutor() {
         return executor;
+    }
+
+    public KBusContext getBeanFactory() {
+        return beanFactory;
     }
 }

@@ -17,6 +17,7 @@ public class HttpTest {
     public static void main(String[] args) {
         KBus bus = new KBus();
         bus.setBufferSize(8192);
+
         Server server = bus.getHttp().createServer();
         server.setListen(9001);
         server.setIo(IOType.BIO);
@@ -25,6 +26,15 @@ public class HttpTest {
 //        location.setProxyPass("http://www.neea.edu.cn/");
         location.setProxyPass("http://182.151.197.163:5000");
         location.setChunkedTransferEncoding(ChunkedTransferEncoding.ON);
+
+        Server server2 = bus.getHttp().createServer();
+        server2.setListen(9002);
+        server2.setIo(IOType.BIO);
+        Location location2 = server2.createLocation();
+        location2.setValue("/");
+        location2.setProxyPass("http://182.151.197.163:5000");
+        location2.setChunkedTransferEncoding(ChunkedTransferEncoding.OFF);
+
         bus.start();
     }
 }

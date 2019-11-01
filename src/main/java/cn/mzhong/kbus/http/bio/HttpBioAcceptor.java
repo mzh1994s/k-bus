@@ -19,9 +19,9 @@ import java.net.Socket;
  */
 public class HttpBioAcceptor extends AbstractHttpAcceptor {
 
-    private final static Logger log = LoggerFactory.getLogger(HttpBioAcceptor.class);;
+    private final static Logger log = LoggerFactory.getLogger(HttpBioAcceptor.class);
 
-    private HttpBioUpstreamPool upstreamPool = new HttpBioUpstreamPool();
+    private HttpBioUpstreamPool upstreamPool;
     private ServerSocket serverSocket;
     private int bufferSize;
 
@@ -30,8 +30,9 @@ public class HttpBioAcceptor extends AbstractHttpAcceptor {
     }
 
     public void start() throws IOException {
-        this.bufferSize = getBus().getBufferSize();
-        this.serverSocket = new ServerSocket(getServer().getListen());
+        this.upstreamPool = super.beanFactory.getBioUpstreamPool();
+        this.bufferSize = super.bus.getBufferSize();
+        this.serverSocket = new ServerSocket(super.server.getListen());
         this.getExecutor().execute(() -> {
             while (true) {
                 try {
