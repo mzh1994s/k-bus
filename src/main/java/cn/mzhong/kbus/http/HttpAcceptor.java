@@ -2,6 +2,7 @@ package cn.mzhong.kbus.http;
 
 import cn.mzhong.kbus.core.IOType;
 import cn.mzhong.kbus.http.bio.HttpBioAcceptor;
+import cn.mzhong.kbus.http.nio.HttpNioAcceptor;
 
 import java.io.IOException;
 

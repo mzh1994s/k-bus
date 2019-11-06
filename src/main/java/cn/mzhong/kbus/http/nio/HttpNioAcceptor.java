@@ -1,6 +1,8 @@
-package cn.mzhong.kbus.http;
+package cn.mzhong.kbus.http.nio;
 
-import java.io.ByteArrayOutputStream;
+import cn.mzhong.kbus.http.AbstractHttpAcceptor;
+import cn.mzhong.kbus.http.Server;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -28,7 +30,6 @@ public class HttpNioAcceptor extends AbstractHttpAcceptor {
         this.socketChannel = ServerSocketChannel.open();
         Server server = getServer();
         InetSocketAddress socketAddress = new InetSocketAddress(server.getListen());
-        // 非阻塞
         this.socketChannel.configureBlocking(false);
         this.socketChannel.bind(socketAddress);
         this.selector = Selector.open();
@@ -47,19 +48,23 @@ public class HttpNioAcceptor extends AbstractHttpAcceptor {
                 }
                 Set<SelectionKey> selectionKeys = selector.selectedKeys();
                 Iterator<SelectionKey> iterator = selectionKeys.iterator();
-                try {
-                    while (iterator.hasNext()) {
-                        SelectionKey next = iterator.next();
+                while (iterator.hasNext()) {
+                    SelectionKey next = iterator.next();
+                    try {
                         if (next.isAcceptable()) {
                             accept(next);
                         } else if (next.isReadable()) {
                             read(next);
+                        } else if (next.isWritable()) {
+                            write(next);
                         }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    } finally {
                         iterator.remove();
                     }
-                } catch (Exception e) {
-                    e.printStackTrace();
                 }
+
             }
         });
     }
@@ -67,19 +72,18 @@ public class HttpNioAcceptor extends AbstractHttpAcceptor {
     protected void accept(SelectionKey selectionKey) throws IOException {
         SocketChannel accept = this.socketChannel.accept();
         accept.configureBlocking(false);
-        accept.register(this.selector, SelectionKey.OP_READ);
-        selectionKey.attach(new ByteArrayOutputStream());
+        accept.register(this.selector, SelectionKey.OP_READ, new UpstreamHandler());
     }
 
     protected void read(SelectionKey selectionKey) throws IOException {
-        SocketChannel channel = (SocketChannel) selectionKey.channel();
-        ByteBuffer byteBuffer = ByteBuffer.allocate(128);
-        int read = channel.read(byteBuffer);
-        selectionKey.attachment();
-        if (read == -1) {
-            channel.close();
-        } else {
-            System.out.println("输出" + new String(byteBuffer.array()));
-        }
+        UpstreamHandler upstreamHandler = (UpstreamHandler) selectionKey.attachment();
+        upstreamHandler.handleDownStreamRead((SocketChannel) selectionKey.channel());
+    }
+
+    protected void write(SelectionKey selectionKey) throws IOException {
+        InetSocketAddress inetSocketAddress = new InetSocketAddress("182.151.197.163", 5000);
+        SocketChannel upstreamChannel = SocketChannel.open(inetSocketAddress);
+        ByteBuffer byteBuffer = ByteBuffer.allocate(1024);
+        upstreamChannel.read(byteBuffer);
     }
 }
