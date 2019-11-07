@@ -9,19 +9,17 @@ package cn.mzhong.kbus.http;
  */
 public class HttpResponse {
 
-    private HttpResponseLine responseLine;
-    private HttpHeader header;
+    private HttpResponseHead head;
 
-    public HttpResponse(HttpResponseLine responseLine, HttpHeader header) {
-        this.responseLine = responseLine;
-        this.header = header;
+    public HttpResponse(HttpResponseHead head) {
+        this.head = head;
     }
 
     public HttpResponseLine getResponseLine() {
-        return responseLine;
+        return head.getResponseLine();
     }
 
     public HttpHeader getHeader() {
-        return header;
+        return head.getHeader();
     }
 }

@@ -1,9 +1,6 @@
 package cn.mzhong.kbus.http.bio;
 
-import cn.mzhong.kbus.http.HttpHeader;
-import cn.mzhong.kbus.http.HttpLog;
-import cn.mzhong.kbus.http.HttpRequest;
-import cn.mzhong.kbus.http.HttpRequestLine;
+import cn.mzhong.kbus.http.*;
 import cn.mzhong.kbus.util.StreamUtils;
 
 import java.io.IOException;
@@ -50,10 +47,10 @@ public class HttpBioRequestReader {
                 if (lineBytes.length == 0) {
                     break;
                 }
-                header.add(lineBytes);
+                header.putLine(lineBytes);
             }
             // 返回请求体
-            return new HttpBioRequest(requestLine, header, inputStream);
+            return new HttpBioRequest(new HttpRequestHead(requestLine, header), inputStream);
         } catch (Exception e) {
             return null;
         } finally {

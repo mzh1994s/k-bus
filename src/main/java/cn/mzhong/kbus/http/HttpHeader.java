@@ -1,6 +1,7 @@
 package cn.mzhong.kbus.http;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -54,8 +55,11 @@ public class HttpHeader {
         return data.containsKey(key);
     }
 
-    public void add(byte[] lineBytes) throws IOException {
-        String line = new String(lineBytes);
+    public void putLine(byte[] lineBytes) throws IOException {
+        this.putLine(new String(lineBytes, StandardCharsets.ISO_8859_1));
+    }
+
+    public void putLine(String line) throws IOException {
         int index = line.indexOf(':');
         if (index < 0) {
             throw new IOException("解析请求头失败：" + line);
@@ -65,7 +69,7 @@ public class HttpHeader {
         this.data.put(headerName, headerValue);
     }
 
-    public byte[] toBytes() {
+    public byte[] toByteArray() {
         return toString().getBytes();
     }
 
@@ -82,7 +86,26 @@ public class HttpHeader {
     public static HttpHeader parse(byte[][] linesBytes) throws IOException {
         HttpHeader httpHeader = new HttpHeader();
         for (byte[] lineBytes : linesBytes) {
-            httpHeader.add(lineBytes);
+            httpHeader.putLine(lineBytes);
+        }
+        return httpHeader;
+    }
+
+    public static HttpHeader parse(byte[] linesBytes) throws IOException {
+        return parse(new String(linesBytes, StandardCharsets.ISO_8859_1));
+    }
+
+    public static HttpHeader parse(String linesString) throws IOException {
+        return parse(linesString.split("\r\n"), 0);
+    }
+
+    public static HttpHeader parse(String[] lines, int offset) throws IOException {
+        HttpHeader httpHeader = new HttpHeader();
+        int length = lines.length;
+        for (int i = offset; i < length; i++) {
+            String line = lines[i];
+            String[] entry = line.split(":");
+            httpHeader.set(entry[0].trim(), entry[1].trim());
         }
         return httpHeader;
     }

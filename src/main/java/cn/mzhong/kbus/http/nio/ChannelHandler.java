@@ -11,10 +11,17 @@ import java.nio.channels.SocketChannel;
  * @author mzhong
  * @version 1.0
  */
-public class UpstreamHandler {
+public class ChannelHandler {
     private HttpHeadBuffer httpHeadBuffer = new HttpHeadBuffer();
-    ByteBuffer buffer = ByteBuffer.allocate(1024);
+    private ByteBuffer buffer = ByteBuffer.allocate(1024);
     private boolean headEof = false;
+    private HttpNioConnector connector;
+    private SocketChannel downstream;
+    private SocketChannel upstream;
+
+    public ChannelHandler(HttpNioConnector connector) {
+        this.connector = connector;
+    }
 
     public void handleDownStreamRead(SocketChannel channel) throws IOException {
         if (headEof) {
@@ -37,6 +44,7 @@ public class UpstreamHandler {
                     headEof = true;
                     httpHeadBuffer.setByteBuffer(buffer);
                     byte[] bytes = httpHeadBuffer.toBytes();
+                    System.out.println(new String(bytes));
                 }
             }
         }
@@ -44,5 +52,37 @@ public class UpstreamHandler {
 
     private void handleBodyRead(SocketChannel channel) {
 
+    }
+
+    public SocketChannel getDownstream() {
+        return downstream;
+    }
+
+    public void setDownstream(SocketChannel downstream) {
+        this.downstream = downstream;
+    }
+
+    public SocketChannel getUpstream() {
+        return upstream;
+    }
+
+    public void setUpstream(SocketChannel upstream) {
+        this.upstream = upstream;
+    }
+
+    public HttpHeadBuffer getHttpHeadBuffer() {
+        return httpHeadBuffer;
+    }
+
+    public void setHttpHeadBuffer(HttpHeadBuffer httpHeadBuffer) {
+        this.httpHeadBuffer = httpHeadBuffer;
+    }
+
+    public ByteBuffer getBuffer() {
+        return buffer;
+    }
+
+    public void setBuffer(ByteBuffer buffer) {
+        this.buffer = buffer;
     }
 }

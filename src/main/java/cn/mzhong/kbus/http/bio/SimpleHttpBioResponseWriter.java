@@ -23,12 +23,12 @@ public class SimpleHttpBioResponseWriter implements HttpBioResponseWriter {
     public void write(HttpBioUpstream upstream, HttpResponse response, HttpBioDownStream downStream, Location location) throws IOException {
         OutputStream outputStream = downStream.getOutputStream();
         //-------------- 写响应行 --------------
-        outputStream.write(response.getResponseLine().getLineBytes());
+        outputStream.write(response.getResponseLine().toByteArray());
         outputStream.write(HttpConstant.LINE_SEPARATOR);
 
         //-------------- 写响应header --------------
         HttpHeader header = response.getHeader();
-        outputStream.write(header.toBytes());
+        outputStream.write(header.toByteArray());
         outputStream.write(HttpConstant.LINE_SEPARATOR);
         // flush一下，让客户端率先知道请求头
         outputStream.flush();

@@ -1,9 +1,6 @@
 package cn.mzhong.kbus.http.bio;
 
-import cn.mzhong.kbus.http.HttpHeader;
-import cn.mzhong.kbus.http.HttpResponse;
-import cn.mzhong.kbus.http.HttpResponseLine;
-import cn.mzhong.kbus.http.IOEOFException;
+import cn.mzhong.kbus.http.*;
 import cn.mzhong.kbus.util.StreamUtils;
 
 import java.io.IOException;
@@ -32,8 +29,8 @@ public class HttpBioResponseReader {
             if (lineBytes.length == 0) {
                 break;
             }
-            header.add(lineBytes);
+            header.putLine(lineBytes);
         }
-        return new HttpResponse(responseLine, header);
+        return new HttpResponse(new HttpResponseHead(responseLine, header));
     }
 }

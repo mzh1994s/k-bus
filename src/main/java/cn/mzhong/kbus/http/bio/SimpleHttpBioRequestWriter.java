@@ -3,9 +3,6 @@ package cn.mzhong.kbus.http.bio;
 import cn.mzhong.kbus.http.HttpConstant;
 import cn.mzhong.kbus.http.HttpHeader;
 import cn.mzhong.kbus.http.Location;
-import cn.mzhong.kbus.http.bio.HttpBioRequest;
-import cn.mzhong.kbus.http.bio.HttpBioRequestWriter;
-import cn.mzhong.kbus.http.bio.HttpBioUpstream;
 import cn.mzhong.kbus.util.StreamUtils;
 
 import java.io.IOException;
@@ -24,12 +21,12 @@ public class SimpleHttpBioRequestWriter implements HttpBioRequestWriter {
     public void write(HttpBioRequest httpRequest, HttpBioUpstream httpUpstream, Location location) throws IOException {
         OutputStream outputStream = httpUpstream.getOutputStream();
         // 写请求行
-        outputStream.write(httpRequest.getRequestLine().getLineBytes());
+        outputStream.write(httpRequest.getRequestLine().toByteArray());
         outputStream.write(HttpConstant.LINE_SEPARATOR);
         // 请求头
         HttpHeader header = httpRequest.getHeader();
         header.set("Host", location.getHost());
-        outputStream.write(httpRequest.getHeader().toBytes());
+        outputStream.write(httpRequest.getHeader().toByteArray());
         // 空行
         outputStream.write(HttpConstant.LINE_SEPARATOR);
         // 请求头体

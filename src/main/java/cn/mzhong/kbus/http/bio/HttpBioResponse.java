@@ -2,6 +2,7 @@ package cn.mzhong.kbus.http.bio;
 
 import cn.mzhong.kbus.http.HttpHeader;
 import cn.mzhong.kbus.http.HttpResponse;
+import cn.mzhong.kbus.http.HttpResponseHead;
 import cn.mzhong.kbus.http.HttpResponseLine;
 
 import java.io.InputStream;
@@ -17,8 +18,8 @@ public class HttpBioResponse extends HttpResponse {
 
     protected final InputStream inputStream;
 
-    public HttpBioResponse(HttpResponseLine responseLine, HttpHeader header, InputStream inputStream) {
-        super(responseLine, header);
+    public HttpBioResponse(HttpResponseHead head, InputStream inputStream) {
+        super(head);
         this.inputStream = inputStream;
     }
 

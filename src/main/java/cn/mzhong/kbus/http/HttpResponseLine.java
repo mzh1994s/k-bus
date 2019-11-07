@@ -1,6 +1,7 @@
 package cn.mzhong.kbus.http;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 /**
  * TODO<br>
@@ -11,9 +12,6 @@ import java.io.IOException;
  */
 public class HttpResponseLine {
 
-    private byte[] lineBytes;
-    private String line;
-
     private String version;
     private String statusCode;
     private String statusName;
@@ -21,12 +19,8 @@ public class HttpResponseLine {
     private HttpResponseLine() {
     }
 
-    public byte[] getLineBytes() {
-        return lineBytes;
-    }
-
     public String getLine() {
-        return line;
+        return version + " " + statusCode + " " + statusName;
     }
 
     public String getVersion() {
@@ -43,14 +37,12 @@ public class HttpResponseLine {
 
     @Override
     public String toString() {
-        return line;
+        return getLine();
     }
 
     public static HttpResponseLine parse(byte[] lineBytes) throws IOException {
         HttpResponseLine responseLine = new HttpResponseLine();
         String line = new String(lineBytes);
-        responseLine.lineBytes = lineBytes;
-        responseLine.line = line;
         // 读version
         int index = line.indexOf(' ');
         if (index < 0) {
@@ -77,5 +69,9 @@ public class HttpResponseLine {
         }
         responseLine.statusName = subResponseLine.substring(index);
         return responseLine;
+    }
+
+    public byte[] toByteArray() {
+        return getLine().getBytes(StandardCharsets.ISO_8859_1);
     }
 }

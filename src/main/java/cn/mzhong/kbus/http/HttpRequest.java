@@ -8,19 +8,18 @@ package cn.mzhong.kbus.http;
  * @version 1.0
  */
 public class HttpRequest {
-    protected final HttpRequestLine requestLine;
-    protected final HttpHeader header;
 
-    public HttpRequest(HttpRequestLine requestLine, HttpHeader header) {
-        this.requestLine = requestLine;
-        this.header = header;
+    private final HttpRequestHead head;
+
+    public HttpRequest(HttpRequestHead httpHead) {
+        this.head = httpHead;
     }
 
     public HttpRequestLine getRequestLine() {
-        return requestLine;
+        return head.getRequestLine();
     }
 
     public HttpHeader getHeader() {
-        return header;
+        return head.getHeader();
     }
 }

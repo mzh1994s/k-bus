@@ -1,5 +1,7 @@
 package cn.mzhong.kbus.http;
 
+import java.nio.charset.StandardCharsets;
+
 /**
  * TODO<br>
  * 创建时间： 2019/10/25 17:57
@@ -9,27 +11,28 @@ package cn.mzhong.kbus.http;
  */
 public class HttpRequestLine {
 
-    private final byte[] lineBytes;
-    private final String line;
-
     private final String method;
     private final String uri;
     private final String version;
 
     public HttpRequestLine(byte[] lineBytes, String line, String method, String uri, String version) {
-        this.lineBytes = lineBytes;
-        this.line = line;
         this.method = method;
         this.uri = uri;
         this.version = version;
     }
 
-    public byte[] getLineBytes() {
-        return lineBytes;
+    public HttpRequestLine(String method, String uri, String version) {
+        this.method = method;
+        this.uri = uri;
+        this.version = version;
+    }
+
+    public byte[] toByteArray() {
+        return getLine().getBytes(StandardCharsets.ISO_8859_1);
     }
 
     public String getLine() {
-        return line;
+        return method + " " + uri + " " + version;
     }
 
     public String getMethod() {
@@ -46,12 +49,15 @@ public class HttpRequestLine {
 
     @Override
     public String toString() {
-        return this.line;
+        return getLine();
     }
 
     public static HttpRequestLine parse(byte[] lineBytes) {
-        String line = new String(lineBytes);
+        return parse(new String(lineBytes));
+    }
+
+    public static HttpRequestLine parse(String line) {
         String[] split = line.split(" ");
-        return new HttpRequestLine(lineBytes, line, split[0], split[1], split[2]);
+        return new HttpRequestLine(split[0], split[1], split[2]);
     }
 }

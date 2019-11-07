@@ -1,6 +1,9 @@
 package cn.mzhong.kbus.http.bio;
 
-import cn.mzhong.kbus.http.*;
+import cn.mzhong.kbus.http.HttpConstant;
+import cn.mzhong.kbus.http.HttpHeader;
+import cn.mzhong.kbus.http.HttpResponse;
+import cn.mzhong.kbus.http.Location;
 import cn.mzhong.kbus.util.StreamUtils;
 
 import java.io.ByteArrayOutputStream;
@@ -21,7 +24,7 @@ public class HttpBioResponseWriter_OffChunkedTransferEncoding implements HttpBio
     public void write(HttpBioUpstream upstream, HttpResponse response, HttpBioDownStream downStream, Location location) throws IOException {
         OutputStream outputStream = downStream.getOutputStream();
         //-------------- 写响应行 --------------
-        outputStream.write(response.getResponseLine().getLineBytes());
+        outputStream.write(response.getResponseLine().toByteArray());
         outputStream.write(HttpConstant.LINE_SEPARATOR);
 
         //-------------- 写header、content --------------
@@ -55,7 +58,7 @@ public class HttpBioResponseWriter_OffChunkedTransferEncoding implements HttpBio
             header.remove(HttpHeader.TRANSFER_ENCODING)
                     .set(HttpHeader.CONTENT_LENGTH, String.valueOf(contentStream.size()));
             // 写响应头
-            outputStream.write(header.toBytes());
+            outputStream.write(header.toByteArray());
             // 空行
             outputStream.write(HttpConstant.LINE_SEPARATOR);
             // flush一下，让客户端率先知道请求头
@@ -63,7 +66,7 @@ public class HttpBioResponseWriter_OffChunkedTransferEncoding implements HttpBio
             // 写内容
             contentStream.writeTo(outputStream);
         } else if (contentLength != null && contentLength > 0) {
-            outputStream.write(header.toBytes());
+            outputStream.write(header.toByteArray());
             outputStream.write(HttpConstant.LINE_SEPARATOR);
             StreamUtils.copyAt(upstreamIn, outputStream, contentLength);
         }

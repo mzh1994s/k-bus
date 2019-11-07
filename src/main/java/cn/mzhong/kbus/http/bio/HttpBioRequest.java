@@ -1,8 +1,7 @@
 package cn.mzhong.kbus.http.bio;
 
-import cn.mzhong.kbus.http.HttpHeader;
+import cn.mzhong.kbus.http.HttpRequestHead;
 import cn.mzhong.kbus.http.HttpRequest;
-import cn.mzhong.kbus.http.HttpRequestLine;
 
 import java.io.InputStream;
 
@@ -17,8 +16,8 @@ public class HttpBioRequest extends HttpRequest {
 
     protected final InputStream inputStream;
 
-    public HttpBioRequest(HttpRequestLine requestLine, HttpHeader header, InputStream inputStream) {
-        super(requestLine, header);
+    public HttpBioRequest(HttpRequestHead httpHead, InputStream inputStream) {
+        super(httpHead);
         this.inputStream = inputStream;
     }
 
