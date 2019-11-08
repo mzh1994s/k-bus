@@ -30,7 +30,6 @@ public class HttpRequestHead {
         return ByteUtils.merge(requestLine.toByteArray(),
                 HttpConstant.LINE_SEPARATOR,
                 header.toByteArray(),
-                HttpConstant.LINE_SEPARATOR,
                 HttpConstant.LINE_SEPARATOR);
     }
 }

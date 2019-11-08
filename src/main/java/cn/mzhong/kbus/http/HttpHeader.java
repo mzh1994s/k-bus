@@ -55,14 +55,14 @@ public class HttpHeader {
         return data.containsKey(key);
     }
 
-    public void putLine(byte[] lineBytes) throws IOException {
+    public void putLine(byte[] lineBytes) {
         this.putLine(new String(lineBytes, StandardCharsets.ISO_8859_1));
     }
 
-    public void putLine(String line) throws IOException {
+    public void putLine(String line) {
         int index = line.indexOf(':');
         if (index < 0) {
-            throw new IOException("解析请求头失败：" + line);
+            return;
         }
         String headerName = line.substring(0, index);
         String headerValue = line.substring(index + 1).trim();
@@ -103,9 +103,7 @@ public class HttpHeader {
         HttpHeader httpHeader = new HttpHeader();
         int length = lines.length;
         for (int i = offset; i < length; i++) {
-            String line = lines[i];
-            String[] entry = line.split(":");
-            httpHeader.set(entry[0].trim(), entry[1].trim());
+            httpHeader.putLine(lines[i]);
         }
         return httpHeader;
     }

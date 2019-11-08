@@ -9,7 +9,7 @@ package cn.mzhong.kbus.http;
  */
 public class HttpResponse {
 
-    private HttpResponseHead head;
+    private final HttpResponseHead head;
 
     public HttpResponse(HttpResponseHead head) {
         this.head = head;
@@ -21,5 +21,9 @@ public class HttpResponse {
 
     public HttpHeader getHeader() {
         return head.getHeader();
+    }
+
+    public HttpResponseHead getHead() {
+        return head;
     }
 }

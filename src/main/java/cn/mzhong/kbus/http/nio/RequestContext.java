@@ -4,6 +4,7 @@ import cn.mzhong.kbus.http.HttpRequest;
 import cn.mzhong.kbus.http.HttpResponse;
 
 import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 
 /**
@@ -14,29 +15,25 @@ import java.nio.channels.SocketChannel;
  * @version 1.0
  */
 public class RequestContext {
-    private final HttpHeadBuffer headBuffer = new HttpHeadBuffer();
-    private final ByteBuffer byteBuffer = ByteBuffer.allocate(1024);
-    private boolean requested;
-    private SocketChannel downstream;
-    private SocketChannel upstream;
-    private HttpRequest request;
-    private HttpResponse response;
+    private final HttpHeadBuffer requestHeadBuffer = new HttpHeadBuffer();
 
-    public HttpHeadBuffer getHeadBuffer() {
-        return headBuffer;
+    public HttpHeadBuffer getRequestHeadBuffer() {
+        return requestHeadBuffer;
     }
+
+    private final HttpHeadBuffer responseHeadBuffer = new HttpHeadBuffer();
+
+    public HttpHeadBuffer getResponseHeadBuffer() {
+        return responseHeadBuffer;
+    }
+
+    private final ByteBuffer byteBuffer = ByteBuffer.allocate(1024);
 
     public ByteBuffer getByteBuffer() {
         return byteBuffer;
     }
 
-    public boolean isRequested() {
-        return requested;
-    }
-
-    public void setRequested(boolean requested) {
-        this.requested = requested;
-    }
+    private SocketChannel downstream;
 
     public SocketChannel getDownstream() {
         return downstream;
@@ -46,6 +43,8 @@ public class RequestContext {
         this.downstream = downstream;
     }
 
+    private SocketChannel upstream;
+
     public SocketChannel getUpstream() {
         return upstream;
     }
@@ -53,6 +52,8 @@ public class RequestContext {
     public void setUpstream(SocketChannel upstream) {
         this.upstream = upstream;
     }
+
+    private HttpRequest request;
 
     public HttpRequest getRequest() {
         return request;
@@ -62,11 +63,53 @@ public class RequestContext {
         this.request = request;
     }
 
+    private HttpResponse response;
+
     public HttpResponse getResponse() {
         return response;
     }
 
     public void setResponse(HttpResponse response) {
         this.response = response;
+    }
+
+
+    private ResponseWriter responseWriter;
+
+    public ResponseWriter getResponseWriter() {
+        return responseWriter;
+    }
+
+    public void setResponseWriter(ResponseWriter responseWriter) {
+        this.responseWriter = responseWriter;
+    }
+
+    private SelectionKey downstreamKey;
+
+    public SelectionKey getDownstreamKey() {
+        return downstreamKey;
+    }
+
+    public void setDownstreamKey(SelectionKey downstreamKey) {
+        this.downstreamKey = downstreamKey;
+    }
+
+    private SelectionKey upstreamKey;
+
+    public SelectionKey getUpstreamKey() {
+        return upstreamKey;
+    }
+
+    public void setUpstreamKey(SelectionKey upstreamKey) {
+        this.upstreamKey = upstreamKey;
+    }
+
+    public void destroy() {
+        if (downstreamKey != null) {
+            downstreamKey.attach(null);
+        }
+        if (upstreamKey != null) {
+            upstreamKey.attach(null);
+        }
     }
 }

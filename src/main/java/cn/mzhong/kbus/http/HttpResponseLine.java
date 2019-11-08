@@ -40,9 +40,8 @@ public class HttpResponseLine {
         return getLine();
     }
 
-    public static HttpResponseLine parse(byte[] lineBytes) throws IOException {
+    public static HttpResponseLine parse(String line) throws IOException {
         HttpResponseLine responseLine = new HttpResponseLine();
-        String line = new String(lineBytes);
         // 读version
         int index = line.indexOf(' ');
         if (index < 0) {
@@ -69,6 +68,10 @@ public class HttpResponseLine {
         }
         responseLine.statusName = subResponseLine.substring(index);
         return responseLine;
+    }
+
+    public static HttpResponseLine parse(byte[] lineBytes) throws IOException {
+        return parse(new String(lineBytes));
     }
 
     public byte[] toByteArray() {

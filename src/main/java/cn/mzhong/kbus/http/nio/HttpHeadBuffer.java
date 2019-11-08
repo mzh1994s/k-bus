@@ -1,7 +1,6 @@
 package cn.mzhong.kbus.http.nio;
 
 import java.io.ByteArrayOutputStream;
-import java.nio.ByteBuffer;
 
 /**
  * TODO<br>
@@ -12,8 +11,8 @@ import java.nio.ByteBuffer;
  */
 public class HttpHeadBuffer {
     private ByteArrayOutputStream headStream = new ByteArrayOutputStream();
+    private byte[] spare;
     private byte[] buf = new byte[4];
-    private ByteBuffer byteBuffer;
     private boolean eof;
 
     public void add(Byte _byte) {
@@ -33,16 +32,22 @@ public class HttpHeadBuffer {
         return headStream.toByteArray();
     }
 
-    public ByteBuffer getByteBuffer() {
-        return byteBuffer;
+
+    public void setSpare(byte[] spare) {
+        this.spare = spare;
     }
 
-    public void setByteBuffer(ByteBuffer byteBuffer) {
-        this.byteBuffer = byteBuffer;
+    public byte[] getSpare() {
+        return spare;
     }
 
     public boolean isEof() {
         return eof;
     }
 
+    public void clear() {
+        this.eof = false;
+        this.buf = new byte[4];
+        this.headStream = new ByteArrayOutputStream();
+    }
 }

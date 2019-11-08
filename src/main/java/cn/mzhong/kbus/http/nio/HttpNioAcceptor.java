@@ -2,12 +2,15 @@ package cn.mzhong.kbus.http.nio;
 
 import cn.mzhong.kbus.http.*;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -22,8 +25,11 @@ public class HttpNioAcceptor extends AbstractHttpAcceptor {
     ServerSocketChannel socketChannel;
     Selector downstreamSelector;
     Selector upstreamSelector;
+    ConnectionFactory connectionFactory;
+    List<RequestContext> requestContextList;
 
     @Override
+
     protected void start() throws IOException {
         Server server = getServer();
         InetSocketAddress socketAddress = new InetSocketAddress(server.getListen());
@@ -33,13 +39,15 @@ public class HttpNioAcceptor extends AbstractHttpAcceptor {
         this.downstreamSelector = Selector.open();
         this.upstreamSelector = Selector.open();
         this.socketChannel.register(this.downstreamSelector, SelectionKey.OP_ACCEPT);
+        this.connectionFactory = new ConnectionFactory();
+        this.requestContextList = new LinkedList<>();
         this.downstreamListen();
         this.upstreamListen();
     }
 
     private Set<SelectionKey> await(Selector selector) {
         try {
-            selector.select(1000);
+            selector.select();
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -56,11 +64,15 @@ public class HttpNioAcceptor extends AbstractHttpAcceptor {
                     iterator.remove();
                     try {
                         if (next.isAcceptable()) {
-                            downstreamAccept(next);
+                            ServerSocketChannel channel = (ServerSocketChannel) next.channel();
+                            SocketChannel accept = channel.accept();
+                            accept.configureBlocking(false);
+                            RequestContext context = new RequestContext();
+                            context.setDownstream(accept);
+                            context.setDownstreamKey(accept.register(this.downstreamSelector, SelectionKey.OP_READ, context));
+                            System.out.println("创建连接：" + context.getDownstreamKey());
                         } else if (next.isReadable()) {
                             downstreamRead(next);
-                        } else if (next.isWritable()) {
-                            downstreamWrite(next);
                         }
                     } catch (Exception e) {
                         e.printStackTrace();
@@ -81,89 +93,137 @@ public class HttpNioAcceptor extends AbstractHttpAcceptor {
                     try {
                         if (next.isReadable()) {
                             upstreamRead(next);
-                        } else if (next.isWritable()) {
-                            upstreamWrite(next);
                         }
                     } catch (Exception e) {
                         e.printStackTrace();
-                    } finally {
+                    }
+                }
+                Iterator<RequestContext> contextIterator = requestContextList.iterator();
+                while (contextIterator.hasNext()) {
+                    RequestContext context = contextIterator.next();
+                    contextIterator.remove();
+                    try {
+                        context.setUpstreamKey(
+                                context.getUpstream().register(this.upstreamSelector, SelectionKey.OP_READ, context));
+                    } catch (ClosedChannelException e) {
+                        e.printStackTrace();
                     }
                 }
             }
         });
     }
 
-    protected void downstreamAccept(SelectionKey selectionKey) throws IOException {
-        SocketChannel accept = this.socketChannel.accept();
-        accept.configureBlocking(false);
-        RequestContext context = new RequestContext();
-        context.setDownstream(accept);
-        accept.register(this.downstreamSelector, SelectionKey.OP_READ, context);
-    }
-
     protected void downstreamRead(SelectionKey selectionKey) throws IOException {
         SocketChannel channel = (SocketChannel) selectionKey.channel();
+        System.out.println("上下文获取：" + selectionKey);
         RequestContext context = (RequestContext) selectionKey.attachment();
-        HttpHeadBuffer headBuffer = context.getHeadBuffer();
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
-        while (channel.read(buffer) > 0) {
-            buffer.flip();
-            while (buffer.hasRemaining()) {
-                headBuffer.add(buffer.get());
-                if (headBuffer.isEof()) {
-                    SocketChannel upstream = SocketChannel.open(new InetSocketAddress("182.151.197.163", 5000));
-                    upstream.configureBlocking(false);
-                    this.upstreamSelector.wakeup();
-                    upstream.register(this.upstreamSelector, SelectionKey.OP_READ | SelectionKey.OP_WRITE, context);
-                    context.setUpstream(upstream);
-                }
-            }
+        if (context == null) {
+            context = new RequestContext();
+            context.setDownstreamKey(selectionKey);
+            context.setDownstream(channel);
+            selectionKey.attach(context);
         }
-    }
-
-    protected void downstreamWrite(SelectionKey selectionKey) throws IOException {
-        SelectableChannel channel = selectionKey.channel();
-        System.out.println("可写");
+        HttpHeadBuffer headBuffer = context.getRequestHeadBuffer();
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        try {
+            int read;
+            while ((read = channel.read(buffer)) > 0) {
+                buffer.flip();
+                if (headBuffer.isEof()) {
+                    context.getUpstream().write(buffer);
+                } else {
+                    while (buffer.hasRemaining()) {
+                        headBuffer.add(buffer.get());
+                        if (headBuffer.isEof()) {
+                            SocketChannel upstream = connectionFactory.getConnection("182.151.197.163", 5000);
+                            context.setUpstream(upstream);
+                            this.requestContextList.add(context);
+                            this.upstreamSelector.wakeup();
+                            String headString = new String(headBuffer.toBytes(), StandardCharsets.ISO_8859_1);
+                            String[] split = headString.split("\r\n");
+                            HttpRequestLine requestLine = HttpRequestLine.parse(split[0]);
+                            HttpHeader header = HttpHeader.parse(split, 1);
+                            header.set("Host", "182.151.197.163:5000");
+                            header.set("Accept-Encoding", "deflate");
+                            HttpRequestHead httpHead = new HttpRequestHead(requestLine, header);
+                            HttpRequest request = new HttpRequest(httpHead);
+                            context.setRequest(request);
+                            System.out.print(new String(httpHead.toByteArray()));
+                            ByteBuffer requestBuffer = ByteBuffer.wrap(httpHead.toByteArray());
+                            upstream.write(requestBuffer);
+                        }
+                    }
+                }
+                buffer.clear();
+            }
+            if (read == -1) {
+                System.out.println("关闭连接：" + selectionKey);
+                selectionKey.cancel();
+            }
+        } catch (Exception e) {
+            selectionKey.cancel();
+        }
     }
 
     protected void upstreamRead(SelectionKey selectionKey) throws IOException {
         SocketChannel channel = (SocketChannel) selectionKey.channel();
         RequestContext context = (RequestContext) selectionKey.attachment();
-        SocketChannel downStream = context.getDownstream();
+        HttpHeadBuffer headBuffer = context.getResponseHeadBuffer();
         ByteBuffer buffer = ByteBuffer.allocate(1024);
+        int read;
         try {
-            while (channel.read(buffer) > 0) {
+            while ((read = channel.read(buffer)) > 0) {
                 buffer.flip();
-                downStream.write(buffer);
-                System.out.println(new String(buffer.array()));
+                if (headBuffer.isEof()) {
+                    if (context.getResponseWriter().writeBody(buffer) == -1) {
+                        System.out.println();
+                        System.out.println("上下文移除：" + context.getDownstreamKey());
+                        context.getUpstreamKey().attach(null);
+                        context.getDownstreamKey().attach(null);
+                        selectionKey.cancel();
+                    }
+                } else {
+                    while (buffer.hasRemaining()) {
+                        headBuffer.add(buffer.get());
+                        if (headBuffer.isEof()) {
+                            String headString = new String(headBuffer.toBytes(), StandardCharsets.ISO_8859_1);
+                            String[] split = headString.split("\r\n");
+                            HttpResponseLine responseLine = HttpResponseLine.parse(split[0]);
+                            HttpHeader header = new HttpHeader();
+                            int length = split.length;
+                            for (int i = 1; i < length; i++) {
+                                header.putLine(split[i]);
+                            }
+                            HttpResponseHead httpResponseHead = new HttpResponseHead(responseLine, header);
+                            HttpResponse response = new HttpResponse(httpResponseHead);
+                            context.setResponse(response);
+
+                            long contentLength = header.getIntValue("Content-Length");
+                            ResponseWriter responseWriter;
+                            if (contentLength > 0) {
+                                responseWriter = new SimpleResponseWriter(context, contentLength);
+                            } else {
+                                responseWriter = new TruckResponseWriter(context);
+                            }
+                            context.setResponseWriter(responseWriter);
+                            System.out.print(new String(httpResponseHead.toByteArray()));
+                            responseWriter.writeHead(ByteBuffer.wrap(httpResponseHead.toByteArray()));
+                            // 读取head时多读出来的，先送上
+                            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                            while (buffer.hasRemaining()) {
+                                byteArrayOutputStream.write(buffer.get());
+                            }
+                            responseWriter.writeBody(ByteBuffer.wrap(byteArrayOutputStream.toByteArray()));
+                        }
+                    }
+                }
+                buffer.clear();
+            }
+            if (read == -1) {
+                selectionKey.cancel();
             }
         } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    protected void upstreamWrite(SelectionKey selectionKey) throws IOException {
-        SocketChannel channel = (SocketChannel) selectionKey.channel();
-        RequestContext context = (RequestContext) selectionKey.attachment();
-        HttpHeadBuffer headBuffer = context.getHeadBuffer();
-        if (!context.isRequested() && headBuffer.isEof()) {
-            byte[] bytes = headBuffer.toBytes();
-            String headString = new String(bytes, StandardCharsets.ISO_8859_1);
-            String[] split = headString.split("\r\n");
-            HttpRequestLine requestLine = HttpRequestLine.parse(split[0]);
-            HttpHeader header = new HttpHeader();
-            int length = split.length;
-            for (int i = 1; i < length; i++) {
-                header.putLine(split[i]);
-            }
-            header.set("Host", "182.151.197.163:5000");
-            HttpRequestHead httpHead = new HttpRequestHead(requestLine, header);
-            HttpRequest request = new HttpRequest(httpHead);
-            context.setRequest(request);
-            System.out.println(new String(httpHead.toByteArray()));
-            ByteBuffer requestBuffer = ByteBuffer.wrap(httpHead.toByteArray());
-            channel.write(requestBuffer);
-            context.setRequested(true);
+            selectionKey.cancel();
         }
     }
 }
