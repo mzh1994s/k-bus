@@ -41,8 +41,9 @@ public class TruckResponseWriter extends AbstractResponseWriter {
             }
         }
         ByteBuffer contentBuffer = ByteBuffer.wrap(byteArrayOutputStream.toByteArray());
-        System.out.print(new String(contentBuffer.array()));
-        context.getDownstream().write(contentBuffer);
+        while (contentBuffer.hasRemaining()) {
+            context.getDownstream().write(contentBuffer);
+        }
         return re;
     }
 }

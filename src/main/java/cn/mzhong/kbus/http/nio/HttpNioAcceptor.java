@@ -2,16 +2,15 @@ package cn.mzhong.kbus.http.nio;
 
 import cn.mzhong.kbus.http.*;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * TODO<br>
@@ -25,8 +24,8 @@ public class HttpNioAcceptor extends AbstractHttpAcceptor {
     ServerSocketChannel socketChannel;
     Selector downstreamSelector;
     Selector upstreamSelector;
-    ConnectionFactory connectionFactory;
-    List<RequestContext> requestContextList;
+    HttpNioConnectionFactory connectionFactory;
+    Queue<RequestContext> requestContextList;
 
     @Override
 
@@ -39,8 +38,8 @@ public class HttpNioAcceptor extends AbstractHttpAcceptor {
         this.downstreamSelector = Selector.open();
         this.upstreamSelector = Selector.open();
         this.socketChannel.register(this.downstreamSelector, SelectionKey.OP_ACCEPT);
-        this.connectionFactory = new ConnectionFactory();
-        this.requestContextList = new LinkedList<>();
+        this.connectionFactory = new HttpNioConnectionFactory();
+        this.requestContextList = new ConcurrentLinkedQueue<>();
         this.downstreamListen();
         this.upstreamListen();
     }
@@ -98,13 +97,11 @@ public class HttpNioAcceptor extends AbstractHttpAcceptor {
                         e.printStackTrace();
                     }
                 }
-                Iterator<RequestContext> contextIterator = requestContextList.iterator();
-                while (contextIterator.hasNext()) {
-                    RequestContext context = contextIterator.next();
-                    contextIterator.remove();
+                RequestContext poll;
+                while ((poll = requestContextList.poll()) != null) {
                     try {
-                        context.setUpstreamKey(
-                                context.getUpstream().register(this.upstreamSelector, SelectionKey.OP_READ, context));
+                        poll.setUpstreamKey(
+                                poll.getUpstream().register(this.upstreamSelector, SelectionKey.OP_READ, poll));
                     } catch (ClosedChannelException e) {
                         e.printStackTrace();
                     }
@@ -115,13 +112,16 @@ public class HttpNioAcceptor extends AbstractHttpAcceptor {
 
     protected void downstreamRead(SelectionKey selectionKey) throws IOException {
         SocketChannel channel = (SocketChannel) selectionKey.channel();
-        System.out.println("上下文获取：" + selectionKey);
         RequestContext context = (RequestContext) selectionKey.attachment();
         if (context == null) {
+            System.out.println("创建上下文：" + selectionKey);
             context = new RequestContext();
             context.setDownstreamKey(selectionKey);
             context.setDownstream(channel);
             selectionKey.attach(context);
+        }
+        if (context.isRequested()) {
+            return;
         }
         HttpHeadBuffer headBuffer = context.getRequestHeadBuffer();
         ByteBuffer buffer = ByteBuffer.allocate(1024);
@@ -130,11 +130,14 @@ public class HttpNioAcceptor extends AbstractHttpAcceptor {
             while ((read = channel.read(buffer)) > 0) {
                 buffer.flip();
                 if (headBuffer.isEof()) {
-                    context.getUpstream().write(buffer);
+                    while (buffer.hasRemaining()) {
+                        context.getUpstream().write(buffer);
+                    }
                 } else {
                     while (buffer.hasRemaining()) {
                         headBuffer.add(buffer.get());
                         if (headBuffer.isEof()) {
+                            context.setRequested(true);
                             SocketChannel upstream = connectionFactory.getConnection("182.151.197.163", 5000);
                             context.setUpstream(upstream);
                             this.requestContextList.add(context);
@@ -148,9 +151,13 @@ public class HttpNioAcceptor extends AbstractHttpAcceptor {
                             HttpRequestHead httpHead = new HttpRequestHead(requestLine, header);
                             HttpRequest request = new HttpRequest(httpHead);
                             context.setRequest(request);
-                            System.out.print(new String(httpHead.toByteArray()));
                             ByteBuffer requestBuffer = ByteBuffer.wrap(httpHead.toByteArray());
-                            upstream.write(requestBuffer);
+                            while (requestBuffer.hasRemaining()) {
+                                upstream.write(requestBuffer);
+                            }
+                            while (buffer.hasRemaining()) {
+                                upstream.write(buffer);
+                            }
                         }
                     }
                 }
@@ -161,6 +168,7 @@ public class HttpNioAcceptor extends AbstractHttpAcceptor {
                 selectionKey.cancel();
             }
         } catch (Exception e) {
+            e.printStackTrace();
             selectionKey.cancel();
         }
     }
@@ -176,8 +184,7 @@ public class HttpNioAcceptor extends AbstractHttpAcceptor {
                 buffer.flip();
                 if (headBuffer.isEof()) {
                     if (context.getResponseWriter().writeBody(buffer) == -1) {
-                        System.out.println();
-                        System.out.println("上下文移除：" + context.getDownstreamKey());
+                        System.out.println("移除上下文：" + context.getDownstreamKey());
                         context.getUpstreamKey().attach(null);
                         context.getDownstreamKey().attach(null);
                         selectionKey.cancel();
@@ -189,11 +196,7 @@ public class HttpNioAcceptor extends AbstractHttpAcceptor {
                             String headString = new String(headBuffer.toBytes(), StandardCharsets.ISO_8859_1);
                             String[] split = headString.split("\r\n");
                             HttpResponseLine responseLine = HttpResponseLine.parse(split[0]);
-                            HttpHeader header = new HttpHeader();
-                            int length = split.length;
-                            for (int i = 1; i < length; i++) {
-                                header.putLine(split[i]);
-                            }
+                            HttpHeader header = HttpHeader.parse(split, 1);
                             HttpResponseHead httpResponseHead = new HttpResponseHead(responseLine, header);
                             HttpResponse response = new HttpResponse(httpResponseHead);
                             context.setResponse(response);
@@ -206,14 +209,14 @@ public class HttpNioAcceptor extends AbstractHttpAcceptor {
                                 responseWriter = new TruckResponseWriter(context);
                             }
                             context.setResponseWriter(responseWriter);
-                            System.out.print(new String(httpResponseHead.toByteArray()));
                             responseWriter.writeHead(ByteBuffer.wrap(httpResponseHead.toByteArray()));
                             // 读取head时多读出来的，先送上
-                            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-                            while (buffer.hasRemaining()) {
-                                byteArrayOutputStream.write(buffer.get());
+                            if (responseWriter.writeBody(buffer) == -1) {
+                                System.out.println("移除上下文：" + context.getDownstreamKey());
+                                context.getUpstreamKey().attach(null);
+                                context.getDownstreamKey().attach(null);
+                                selectionKey.cancel();
                             }
-                            responseWriter.writeBody(ByteBuffer.wrap(byteArrayOutputStream.toByteArray()));
                         }
                     }
                 }
@@ -223,6 +226,7 @@ public class HttpNioAcceptor extends AbstractHttpAcceptor {
                 selectionKey.cancel();
             }
         } catch (Exception e) {
+            e.printStackTrace();
             selectionKey.cancel();
         }
     }

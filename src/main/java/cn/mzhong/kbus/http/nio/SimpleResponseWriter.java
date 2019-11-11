@@ -22,8 +22,10 @@ public class SimpleResponseWriter extends AbstractResponseWriter {
 
     public int writeBody(ByteBuffer buffer) throws IOException {
         write += buffer.limit() - buffer.position();
-        context.getDownstream().write(buffer);
-        System.out.print(new String(buffer.array()));
+        while (buffer.hasRemaining()) {
+            context.getDownstream().write(buffer);
+        }
+        System.out.println(context.getRequest().getRequestLine().getUri() + ":" + write + "/" + contentLength);
         if (write >= contentLength) {
             return -1;
         }

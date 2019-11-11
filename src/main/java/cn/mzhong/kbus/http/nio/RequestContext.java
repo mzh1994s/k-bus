@@ -15,6 +15,7 @@ import java.nio.channels.SocketChannel;
  * @version 1.0
  */
 public class RequestContext {
+
     private final HttpHeadBuffer requestHeadBuffer = new HttpHeadBuffer();
 
     public HttpHeadBuffer getRequestHeadBuffer() {
@@ -104,12 +105,13 @@ public class RequestContext {
         this.upstreamKey = upstreamKey;
     }
 
-    public void destroy() {
-        if (downstreamKey != null) {
-            downstreamKey.attach(null);
-        }
-        if (upstreamKey != null) {
-            upstreamKey.attach(null);
-        }
+    private boolean requested;
+
+    public boolean isRequested() {
+        return requested;
+    }
+
+    public void setRequested(boolean requested) {
+        this.requested = requested;
     }
 }
