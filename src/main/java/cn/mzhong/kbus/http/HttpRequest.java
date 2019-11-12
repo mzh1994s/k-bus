@@ -22,4 +22,8 @@ public class HttpRequest {
     public HttpHeader getHeader() {
         return head.getHeader();
     }
+
+    public HttpRequestHead getHead() {
+        return head;
+    }
 }

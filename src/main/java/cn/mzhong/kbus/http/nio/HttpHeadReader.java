@@ -9,9 +9,8 @@ import java.io.ByteArrayOutputStream;
  * @author mzhong
  * @version 1.0
  */
-public class HttpHeadBuffer {
+public class HttpHeadReader {
     private ByteArrayOutputStream headStream = new ByteArrayOutputStream();
-    private byte[] spare;
     private byte[] buf = new byte[4];
     private boolean eof;
 
@@ -30,15 +29,6 @@ public class HttpHeadBuffer {
 
     public byte[] toBytes() {
         return headStream.toByteArray();
-    }
-
-
-    public void setSpare(byte[] spare) {
-        this.spare = spare;
-    }
-
-    public byte[] getSpare() {
-        return spare;
     }
 
     public boolean isEof() {

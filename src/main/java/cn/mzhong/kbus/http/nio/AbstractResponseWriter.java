@@ -10,7 +10,7 @@ import java.nio.ByteBuffer;
  * @author mzhong
  * @version 1.0
  */
-public abstract class AbstractResponseWriter implements ResponseWriter {
+public abstract class AbstractResponseWriter implements HttpWriter {
 
     protected RequestContext context;
 

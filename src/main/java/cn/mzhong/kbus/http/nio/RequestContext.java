@@ -16,22 +16,22 @@ import java.nio.channels.SocketChannel;
  */
 public class RequestContext {
 
-    private final HttpHeadBuffer requestHeadBuffer = new HttpHeadBuffer();
+    private final HttpHeadReader requestHeadReader = new HttpHeadReader();
 
-    public HttpHeadBuffer getRequestHeadBuffer() {
-        return requestHeadBuffer;
+    public HttpHeadReader getRequestHeadReader() {
+        return requestHeadReader;
     }
 
-    private final HttpHeadBuffer responseHeadBuffer = new HttpHeadBuffer();
+    private final HttpHeadReader responseHeadReader = new HttpHeadReader();
 
-    public HttpHeadBuffer getResponseHeadBuffer() {
-        return responseHeadBuffer;
+    public HttpHeadReader getResponseHeadReader() {
+        return responseHeadReader;
     }
 
-    private final ByteBuffer byteBuffer = ByteBuffer.allocate(1024);
+    private final ByteBuffer buffer = ByteBuffer.allocate(1024);
 
-    public ByteBuffer getByteBuffer() {
-        return byteBuffer;
+    public ByteBuffer getBuffer() {
+        return buffer;
     }
 
     private SocketChannel downstream;
@@ -75,14 +75,24 @@ public class RequestContext {
     }
 
 
-    private ResponseWriter responseWriter;
+    private HttpWriter responseWriter;
 
-    public ResponseWriter getResponseWriter() {
+    public HttpWriter getResponseWriter() {
         return responseWriter;
     }
 
-    public void setResponseWriter(ResponseWriter responseWriter) {
+    public void setResponseWriter(HttpWriter responseWriter) {
         this.responseWriter = responseWriter;
+    }
+
+    private HttpWriter requestWriter;
+
+    public HttpWriter getRequestWriter() {
+        return requestWriter;
+    }
+
+    public void setRequestWriter(HttpWriter requestWriter) {
+        this.requestWriter = requestWriter;
     }
 
     private SelectionKey downstreamKey;

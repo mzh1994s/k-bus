@@ -7,9 +7,7 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.nio.charset.StandardCharsets;
-import java.util.Iterator;
-import java.util.Queue;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
@@ -25,10 +23,10 @@ public class HttpNioAcceptor extends AbstractHttpAcceptor {
     Selector downstreamSelector;
     Selector upstreamSelector;
     HttpNioConnectionFactory connectionFactory;
-    Queue<RequestContext> requestContextList;
+    private Queue<RequestContext> requestContextList;
+    private List<RequestHandler> requestHandlerList;
 
     @Override
-
     protected void start() throws IOException {
         Server server = getServer();
         InetSocketAddress socketAddress = new InetSocketAddress(server.getListen());
@@ -40,8 +38,14 @@ public class HttpNioAcceptor extends AbstractHttpAcceptor {
         this.socketChannel.register(this.downstreamSelector, SelectionKey.OP_ACCEPT);
         this.connectionFactory = new HttpNioConnectionFactory();
         this.requestContextList = new ConcurrentLinkedQueue<>();
+        this.initRequestHandlerSet();
         this.downstreamListen();
         this.upstreamListen();
+    }
+
+    private void initRequestHandlerSet() {
+        this.requestHandlerList = new LinkedList<>();
+        this.requestHandlerList.add(new HttpRequestHandler());
     }
 
     private Set<SelectionKey> await(Selector selector) {
@@ -71,10 +75,12 @@ public class HttpNioAcceptor extends AbstractHttpAcceptor {
                             context.setDownstreamKey(accept.register(this.downstreamSelector, SelectionKey.OP_READ, context));
                             System.out.println("创建连接：" + context.getDownstreamKey());
                         } else if (next.isReadable()) {
-                            downstreamRead(next);
+                            this.onDownstreamRead(next);
+                        } else if (next.isWritable()) {
+                            this.onDownstreamWrite(next);
                         }
                     } catch (Exception e) {
-                        e.printStackTrace();
+                        next.cancel();
                     }
                 }
             }
@@ -91,17 +97,19 @@ public class HttpNioAcceptor extends AbstractHttpAcceptor {
                     iterator.remove();
                     try {
                         if (next.isReadable()) {
-                            upstreamRead(next);
+                            this.onUpstreamRead(next);
+                        } else if (next.isWritable()) {
+                            this.onUpstreamWrite(next);
                         }
                     } catch (Exception e) {
-                        e.printStackTrace();
+                        next.cancel();
                     }
                 }
                 RequestContext poll;
                 while ((poll = requestContextList.poll()) != null) {
                     try {
                         poll.setUpstreamKey(
-                                poll.getUpstream().register(this.upstreamSelector, SelectionKey.OP_READ, poll));
+                                poll.getUpstream().register(this.upstreamSelector, SelectionKey.OP_WRITE, poll));
                     } catch (ClosedChannelException e) {
                         e.printStackTrace();
                     }
@@ -110,124 +118,152 @@ public class HttpNioAcceptor extends AbstractHttpAcceptor {
         });
     }
 
-    protected void downstreamRead(SelectionKey selectionKey) throws IOException {
+    private RequestContext getContext(SelectionKey selectionKey) {
         SocketChannel channel = (SocketChannel) selectionKey.channel();
         RequestContext context = (RequestContext) selectionKey.attachment();
         if (context == null) {
-            System.out.println("创建上下文：" + selectionKey);
-            context = new RequestContext();
-            context.setDownstreamKey(selectionKey);
-            context.setDownstream(channel);
-            selectionKey.attach(context);
-        }
-        if (context.isRequested()) {
-            return;
-        }
-        HttpHeadBuffer headBuffer = context.getRequestHeadBuffer();
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
-        try {
-            int read;
-            while ((read = channel.read(buffer)) > 0) {
-                buffer.flip();
-                if (headBuffer.isEof()) {
-                    while (buffer.hasRemaining()) {
-                        context.getUpstream().write(buffer);
-                    }
-                } else {
-                    while (buffer.hasRemaining()) {
-                        headBuffer.add(buffer.get());
-                        if (headBuffer.isEof()) {
-                            context.setRequested(true);
-                            SocketChannel upstream = connectionFactory.getConnection("182.151.197.163", 5000);
-                            context.setUpstream(upstream);
-                            this.requestContextList.add(context);
-                            this.upstreamSelector.wakeup();
-                            String headString = new String(headBuffer.toBytes(), StandardCharsets.ISO_8859_1);
-                            String[] split = headString.split("\r\n");
-                            HttpRequestLine requestLine = HttpRequestLine.parse(split[0]);
-                            HttpHeader header = HttpHeader.parse(split, 1);
-                            header.set("Host", "182.151.197.163:5000");
-                            header.set("Accept-Encoding", "deflate");
-                            HttpRequestHead httpHead = new HttpRequestHead(requestLine, header);
-                            HttpRequest request = new HttpRequest(httpHead);
-                            context.setRequest(request);
-                            ByteBuffer requestBuffer = ByteBuffer.wrap(httpHead.toByteArray());
-                            while (requestBuffer.hasRemaining()) {
-                                upstream.write(requestBuffer);
-                            }
-                            while (buffer.hasRemaining()) {
-                                upstream.write(buffer);
-                            }
-                        }
-                    }
+            synchronized (selectionKey) {
+                context = (RequestContext) selectionKey.attachment();
+                if (context == null) {
+                    context = new RequestContext();
+                    context.setDownstreamKey(selectionKey);
+                    context.setDownstream(channel);
+                    selectionKey.attach(context);
                 }
-                buffer.clear();
             }
-            if (read == -1) {
-                System.out.println("关闭连接：" + selectionKey);
+        }
+        return context;
+    }
+
+    protected void onDownstreamWrite(SelectionKey selectionKey) throws IOException {
+        RequestContext context = (RequestContext) selectionKey.attachment();
+        HttpWriter responseWriter = context.getResponseWriter();
+        ByteBuffer buffer = context.getResponse().getHead().getBuffer();
+        // 读取head时多读出来的，先送上
+        if (buffer.hasRemaining()) {
+            responseWriter.writeHead(buffer);
+        } else {
+            buffer = context.getBuffer();
+            if (responseWriter.writeBody(buffer) == -1) {
+                System.out.println("移除上下文：" + context.getDownstreamKey());
+                context.getUpstreamKey().attach(null);
+                context.getDownstreamKey().attach(null);
                 selectionKey.cancel();
+                return;
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-            selectionKey.cancel();
+        }
+        if (!buffer.hasRemaining()) {
+            SelectionKey upstreamKey = context.getUpstreamKey();
+            upstreamKey.interestOps(upstreamKey.interestOps() ^ SelectionKey.OP_READ);
         }
     }
 
-    protected void upstreamRead(SelectionKey selectionKey) throws IOException {
+    protected void onDownstreamRead(SelectionKey selectionKey) throws IOException {
+        RequestContext context = getContext(selectionKey);
+        SocketChannel downstream = context.getDownstream();
+        HttpHeadReader headBuffer = context.getRequestHeadReader();
+        ByteBuffer buffer = context.getBuffer();
+        int read = downstream.read(context.getBuffer());
+        // 如果缓冲器读满，则停止监听读
+        if (read == 0) {
+            // 使用异或运算取消读事件的监听
+            selectionKey.interestOps(selectionKey.interestOps() ^ SelectionKey.OP_READ);
+        }
+        if (read == -1) {
+            throw new IOClosedException();
+        }
+        if (headBuffer.isEof()) {
+            SelectionKey upstreamKey = context.getUpstreamKey();
+            // 通知写入上游
+            upstreamKey.interestOps(upstreamKey.interestOps() | SelectionKey.OP_WRITE);
+        } else {
+            // 读head
+            buffer.flip();
+            while (buffer.hasRemaining()) {
+                headBuffer.add(buffer.get());
+                if (headBuffer.isEof()) {
+                    SocketChannel upstream = connectionFactory.getConnection("182.151.197.163", 5000);
+                    context.setUpstream(upstream);
+                    String headString = new String(headBuffer.toBytes(), StandardCharsets.ISO_8859_1);
+                    String[] split = headString.split("\r\n");
+                    HttpRequestLine requestLine = HttpRequestLine.parse(split[0]);
+                    HttpHeader header = HttpHeader.parse(split, 1);
+                    header.set("Host", "182.151.197.163:5000");
+                    header.set("Accept-Encoding", "deflate");
+                    HttpRequestHead httpHead = new HttpRequestHead(requestLine, header);
+                    HttpRequest request = new HttpRequest(httpHead);
+                    context.setRequest(request);
+                    context.setRequestWriter(new RequestWriter(context, header.getIntValue("Content-Length")));
+                    this.requestContextList.add(context);
+                    this.upstreamSelector.wakeup();
+                }
+            }
+        }
+    }
+
+    private void onUpstreamWrite(SelectionKey selectionKey) throws IOException {
+        RequestContext context = (RequestContext) selectionKey.attachment();
+        // 看头有没有传完，传完头再传数据
+        ByteBuffer buffer = context.getRequest().getHead().getBuffer();
+        if (buffer.hasRemaining()) {
+            context.getRequestWriter().writeHead(buffer);
+        }
+        // 如果没写完，放入下一次继续
+        if (buffer.hasRemaining()) {
+            return;
+        }
+        buffer = context.getBuffer();
+        buffer.flip();
+        if (context.getRequestWriter().writeBody(buffer) == -1) {
+            // 请求报文写完了，开始读
+            selectionKey.interestOps(SelectionKey.OP_READ);
+            SelectionKey downstreamKey = context.getDownstreamKey();
+            // 这次请求数据已经读完了，禁止再向下游读取数据
+            downstreamKey.interestOps(downstreamKey.interestOps() ^ SelectionKey.OP_READ);
+            buffer.clear();
+        }
+    }
+
+    protected void onUpstreamRead(SelectionKey selectionKey) throws IOException {
         SocketChannel channel = (SocketChannel) selectionKey.channel();
         RequestContext context = (RequestContext) selectionKey.attachment();
-        HttpHeadBuffer headBuffer = context.getResponseHeadBuffer();
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
-        int read;
-        try {
-            while ((read = channel.read(buffer)) > 0) {
-                buffer.flip();
+        HttpHeadReader headBuffer = context.getResponseHeadReader();
+        ByteBuffer buffer = context.getBuffer();
+        int read = channel.read(buffer);
+        if (read == 0) {
+            return;
+        }
+        if (read == -1) {
+            throw new IOClosedException();
+        }
+        SelectionKey downstreamKey = context.getDownstreamKey();
+        if (headBuffer.isEof()) {
+            downstreamKey.interestOps(downstreamKey.interestOps() | SelectionKey.OP_WRITE);
+            selectionKey.interestOps(selectionKey.interestOps() ^ SelectionKey.OP_READ);
+        } else {
+            while (buffer.hasRemaining()) {
+                headBuffer.add(buffer.get());
                 if (headBuffer.isEof()) {
-                    if (context.getResponseWriter().writeBody(buffer) == -1) {
-                        System.out.println("移除上下文：" + context.getDownstreamKey());
-                        context.getUpstreamKey().attach(null);
-                        context.getDownstreamKey().attach(null);
-                        selectionKey.cancel();
-                    }
-                } else {
-                    while (buffer.hasRemaining()) {
-                        headBuffer.add(buffer.get());
-                        if (headBuffer.isEof()) {
-                            String headString = new String(headBuffer.toBytes(), StandardCharsets.ISO_8859_1);
-                            String[] split = headString.split("\r\n");
-                            HttpResponseLine responseLine = HttpResponseLine.parse(split[0]);
-                            HttpHeader header = HttpHeader.parse(split, 1);
-                            HttpResponseHead httpResponseHead = new HttpResponseHead(responseLine, header);
-                            HttpResponse response = new HttpResponse(httpResponseHead);
-                            context.setResponse(response);
+                    String headString = new String(headBuffer.toBytes(), StandardCharsets.ISO_8859_1);
+                    String[] split = headString.split("\r\n");
+                    HttpResponseLine responseLine = HttpResponseLine.parse(split[0]);
+                    HttpHeader header = HttpHeader.parse(split, 1);
+                    HttpResponseHead httpResponseHead = new HttpResponseHead(responseLine, header);
+                    HttpResponse response = new HttpResponse(httpResponseHead);
+                    context.setResponse(response);
 
-                            long contentLength = header.getIntValue("Content-Length");
-                            ResponseWriter responseWriter;
-                            if (contentLength > 0) {
-                                responseWriter = new SimpleResponseWriter(context, contentLength);
-                            } else {
-                                responseWriter = new TruckResponseWriter(context);
-                            }
-                            context.setResponseWriter(responseWriter);
-                            responseWriter.writeHead(ByteBuffer.wrap(httpResponseHead.toByteArray()));
-                            // 读取head时多读出来的，先送上
-                            if (responseWriter.writeBody(buffer) == -1) {
-                                System.out.println("移除上下文：" + context.getDownstreamKey());
-                                context.getUpstreamKey().attach(null);
-                                context.getDownstreamKey().attach(null);
-                                selectionKey.cancel();
-                            }
-                        }
+                    long contentLength = header.getIntValue("Content-Length");
+                    HttpWriter responseWriter;
+                    if (contentLength > 0) {
+                        responseWriter = new SimpleResponseWriter(context, contentLength);
+                    } else {
+                        responseWriter = new TruckResponseWriter(context);
                     }
+                    context.setResponseWriter(responseWriter);
+                    downstreamKey.interestOps(downstreamKey.interestOps() | SelectionKey.OP_WRITE);
+                    selectionKey.interestOps(selectionKey.interestOps() ^ SelectionKey.OP_READ);
                 }
-                buffer.clear();
             }
-            if (read == -1) {
-                selectionKey.cancel();
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            selectionKey.cancel();
         }
     }
 }

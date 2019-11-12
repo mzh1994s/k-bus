@@ -2,6 +2,8 @@ package cn.mzhong.kbus.http;
 
 import cn.mzhong.kbus.util.ByteUtils;
 
+import java.nio.ByteBuffer;
+
 /**
  * TODO<br>
  * 创建时间： 2019/11/7 16:50
@@ -12,6 +14,7 @@ import cn.mzhong.kbus.util.ByteUtils;
 public class HttpResponseHead {
     private final HttpResponseLine responseLine;
     private final HttpHeader header;
+    private ByteBuffer buffer;
 
     public HttpResponseHead(HttpResponseLine responseLine, HttpHeader header) {
         this.responseLine = responseLine;
@@ -24,6 +27,13 @@ public class HttpResponseHead {
 
     public HttpHeader getHeader() {
         return header;
+    }
+
+    public ByteBuffer getBuffer() {
+        if (buffer == null) {
+            buffer = ByteBuffer.wrap(toByteArray());
+        }
+        return buffer;
     }
 
     public byte[] toByteArray() {

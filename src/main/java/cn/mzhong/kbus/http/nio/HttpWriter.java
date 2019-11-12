@@ -10,7 +10,7 @@ import java.nio.ByteBuffer;
  * @author mzhong
  * @version 1.0
  */
-public interface ResponseWriter {
+public interface HttpWriter {
 
     void writeHead(ByteBuffer buffer) throws IOException;
 
