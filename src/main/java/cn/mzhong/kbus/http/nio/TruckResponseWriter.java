@@ -14,14 +14,15 @@ import java.nio.ByteBuffer;
 public class TruckResponseWriter extends AbstractResponseWriter {
 
     private byte[] eb = new byte[7];
+    private long write;
 
     public TruckResponseWriter(RequestContext context) {
         super(context);
     }
 
     @Override
-    public int writeBody(ByteBuffer buffer) throws IOException {
-        int re = 1;
+    public IOStatus writeBody(ByteBuffer buffer) throws IOException {
+        boolean eof = false;
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         while (buffer.hasRemaining()) {
             byte b = buffer.get();
@@ -36,14 +37,13 @@ public class TruckResponseWriter extends AbstractResponseWriter {
             if (eb[0] == '\r' && eb[1] == '\n'
                     && eb[2] == '0'
                     && eb[3] == '\r' && eb[4] == '\n' && eb[5] == '\r' && eb[6] == '\n') {
-                re = -1;
-                break;
+                eof = true;
             }
         }
         ByteBuffer contentBuffer = ByteBuffer.wrap(byteArrayOutputStream.toByteArray());
         while (contentBuffer.hasRemaining()) {
-            context.getDownstream().write(contentBuffer);
+            write += context.getDownstream().write(contentBuffer);
         }
-        return re;
+        return eof ? IOStatus.EOF : IOStatus.MISSION;
     }
 }

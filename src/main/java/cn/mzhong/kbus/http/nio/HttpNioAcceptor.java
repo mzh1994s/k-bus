@@ -135,50 +135,59 @@ public class HttpNioAcceptor extends AbstractHttpAcceptor {
         return context;
     }
 
-    protected void onDownstreamWrite(SelectionKey selectionKey) throws IOException {
-        RequestContext context = (RequestContext) selectionKey.attachment();
+    protected void onDownstreamWrite(SelectionKey downstreamKey) throws IOException {
+        RequestContext context = (RequestContext) downstreamKey.attachment();
+        SelectionKey upstreamKey = context.getUpstreamKey();
         HttpWriter responseWriter = context.getResponseWriter();
         ByteBuffer buffer = context.getResponse().getHead().getBuffer();
         // 读取head时多读出来的，先送上
         if (buffer.hasRemaining()) {
             responseWriter.writeHead(buffer);
-        } else {
-            buffer = context.getBuffer();
-            if (responseWriter.writeBody(buffer) == -1) {
-                System.out.println("移除上下文：" + context.getDownstreamKey());
-                context.getUpstreamKey().attach(null);
-                context.getDownstreamKey().attach(null);
-                selectionKey.cancel();
-                return;
-            }
         }
+        if (buffer.hasRemaining()) {
+            return;
+        }
+        buffer = context.getBuffer();
+        if (responseWriter.writeBody(buffer) == IOStatus.EOF) {
+            System.out.println("移除上下文：" + downstreamKey);
+            upstreamKey.attach(null);
+            upstreamKey.cancel();
+            downstreamKey.attach(null);
+            // 监听下一次请求
+            downstreamKey.interestOps(SelectionKey.OP_READ);
+            return;
+        }
+        // 如果写完了，换成上游读模式
         if (!buffer.hasRemaining()) {
-            SelectionKey upstreamKey = context.getUpstreamKey();
-            upstreamKey.interestOps(upstreamKey.interestOps() ^ SelectionKey.OP_READ);
+            // 下游禁写
+            downstreamKey.interestOps(0);
+            // 上游置读
+            upstreamKey.interestOps(SelectionKey.OP_READ);
         }
     }
 
-    protected void onDownstreamRead(SelectionKey selectionKey) throws IOException {
-        RequestContext context = getContext(selectionKey);
+    protected void onDownstreamRead(SelectionKey downstreamKey) throws IOException {
+        RequestContext context = getContext(downstreamKey);
         SocketChannel downstream = context.getDownstream();
         HttpHeadReader headBuffer = context.getRequestHeadReader();
         ByteBuffer buffer = context.getBuffer();
         int read = downstream.read(context.getBuffer());
         // 如果缓冲器读满，则停止监听读
         if (read == 0) {
-            // 使用异或运算取消读事件的监听
-            selectionKey.interestOps(selectionKey.interestOps() ^ SelectionKey.OP_READ);
+            return;
         }
         if (read == -1) {
             throw new IOClosedException();
         }
+        buffer.flip();
         if (headBuffer.isEof()) {
+            // 下游禁读
+            downstreamKey.interestOps(0);
+            // 上游启写
             SelectionKey upstreamKey = context.getUpstreamKey();
-            // 通知写入上游
-            upstreamKey.interestOps(upstreamKey.interestOps() | SelectionKey.OP_WRITE);
+            upstreamKey.interestOps(SelectionKey.OP_WRITE);
         } else {
             // 读head
-            buffer.flip();
             while (buffer.hasRemaining()) {
                 headBuffer.add(buffer.get());
                 if (headBuffer.isEof()) {
@@ -194,15 +203,18 @@ public class HttpNioAcceptor extends AbstractHttpAcceptor {
                     HttpRequest request = new HttpRequest(httpHead);
                     context.setRequest(request);
                     context.setRequestWriter(new RequestWriter(context, header.getIntValue("Content-Length")));
+                    // 下游禁读
+                    downstreamKey.interestOps(0);
                     this.requestContextList.add(context);
                     this.upstreamSelector.wakeup();
+                    break;
                 }
             }
         }
     }
 
-    private void onUpstreamWrite(SelectionKey selectionKey) throws IOException {
-        RequestContext context = (RequestContext) selectionKey.attachment();
+    private void onUpstreamWrite(SelectionKey upstreamKey) throws IOException {
+        RequestContext context = (RequestContext) upstreamKey.attachment();
         // 看头有没有传完，传完头再传数据
         ByteBuffer buffer = context.getRequest().getHead().getBuffer();
         if (buffer.hasRemaining()) {
@@ -213,33 +225,35 @@ public class HttpNioAcceptor extends AbstractHttpAcceptor {
             return;
         }
         buffer = context.getBuffer();
-        buffer.flip();
-        if (context.getRequestWriter().writeBody(buffer) == -1) {
-            // 请求报文写完了，开始读
-            selectionKey.interestOps(SelectionKey.OP_READ);
+        if (context.getRequestWriter().writeBody(buffer) == IOStatus.EOF) {
+            // 上游启读
+            upstreamKey.interestOps(SelectionKey.OP_READ);
+            // 下游禁读写
             SelectionKey downstreamKey = context.getDownstreamKey();
-            // 这次请求数据已经读完了，禁止再向下游读取数据
-            downstreamKey.interestOps(downstreamKey.interestOps() ^ SelectionKey.OP_READ);
+            downstreamKey.interestOps(0);
+            // 缓冲区清除干净，准备接受响应数据
             buffer.clear();
         }
     }
 
-    protected void onUpstreamRead(SelectionKey selectionKey) throws IOException {
-        SocketChannel channel = (SocketChannel) selectionKey.channel();
-        RequestContext context = (RequestContext) selectionKey.attachment();
+    protected void onUpstreamRead(SelectionKey upstreamKey) throws IOException {
+        SocketChannel upstream = (SocketChannel) upstreamKey.channel();
+        RequestContext context = (RequestContext) upstreamKey.attachment();
         HttpHeadReader headBuffer = context.getResponseHeadReader();
         ByteBuffer buffer = context.getBuffer();
-        int read = channel.read(buffer);
+        int read = upstream.read(buffer);
         if (read == 0) {
             return;
         }
         if (read == -1) {
             throw new IOClosedException();
         }
+        buffer.flip();
         SelectionKey downstreamKey = context.getDownstreamKey();
         if (headBuffer.isEof()) {
-            downstreamKey.interestOps(downstreamKey.interestOps() | SelectionKey.OP_WRITE);
-            selectionKey.interestOps(selectionKey.interestOps() ^ SelectionKey.OP_READ);
+            // 下游写
+            downstreamKey.interestOps(SelectionKey.OP_WRITE);
+            upstreamKey.interestOps(0);
         } else {
             while (buffer.hasRemaining()) {
                 headBuffer.add(buffer.get());
@@ -252,7 +266,7 @@ public class HttpNioAcceptor extends AbstractHttpAcceptor {
                     HttpResponse response = new HttpResponse(httpResponseHead);
                     context.setResponse(response);
 
-                    long contentLength = header.getIntValue("Content-Length");
+                    int contentLength = header.getIntValue("Content-Length");
                     HttpWriter responseWriter;
                     if (contentLength > 0) {
                         responseWriter = new SimpleResponseWriter(context, contentLength);
@@ -260,8 +274,10 @@ public class HttpNioAcceptor extends AbstractHttpAcceptor {
                         responseWriter = new TruckResponseWriter(context);
                     }
                     context.setResponseWriter(responseWriter);
-                    downstreamKey.interestOps(downstreamKey.interestOps() | SelectionKey.OP_WRITE);
-                    selectionKey.interestOps(selectionKey.interestOps() ^ SelectionKey.OP_READ);
+                    // 响应头接受完毕了，通知下游读
+                    downstreamKey.interestOps(SelectionKey.OP_WRITE);
+                    upstreamKey.interestOps(0);
+                    break;
                 }
             }
         }

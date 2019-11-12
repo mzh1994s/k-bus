@@ -20,15 +20,16 @@ public class SimpleResponseWriter extends AbstractResponseWriter {
         this.contentLength = contentLength;
     }
 
-    public int writeBody(ByteBuffer buffer) throws IOException {
-        write += buffer.limit() - buffer.position();
-        while (buffer.hasRemaining()) {
-            context.getDownstream().write(buffer);
+    public IOStatus writeBody(ByteBuffer buffer) throws IOException {
+        if (contentLength > 0) {
+            write += context.getDownstream().write(buffer);
+            System.out.println(context.getRequest().getRequestLine().getUri() + ":" + write + "/" + contentLength);
+            if (write >= contentLength) {
+                return IOStatus.EOF;
+            }
+            return IOStatus.MISSION;
+        } else {
+            return IOStatus.EOF;
         }
-        System.out.println(context.getRequest().getRequestLine().getUri() + ":" + write + "/" + contentLength);
-        if (write >= contentLength) {
-            return -1;
-        }
-        return 1;
     }
 }

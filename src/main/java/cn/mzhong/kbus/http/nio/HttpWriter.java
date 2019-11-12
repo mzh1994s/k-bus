@@ -14,5 +14,5 @@ public interface HttpWriter {
 
     void writeHead(ByteBuffer buffer) throws IOException;
 
-    int writeBody(ByteBuffer buffer) throws IOException;
+    IOStatus writeBody(ByteBuffer buffer) throws IOException;
 }

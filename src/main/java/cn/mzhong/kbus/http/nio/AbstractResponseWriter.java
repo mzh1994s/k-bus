@@ -20,8 +20,6 @@ public abstract class AbstractResponseWriter implements HttpWriter {
 
     @Override
     public void writeHead(ByteBuffer buffer) throws IOException {
-        while (buffer.hasRemaining()) {
-            context.getDownstream().write(buffer);
-        }
+        System.out.println(context.getDownstream().write(buffer));
     }
 }

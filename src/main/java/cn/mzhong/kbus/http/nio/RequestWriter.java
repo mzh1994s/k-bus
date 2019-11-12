@@ -28,15 +28,15 @@ public class RequestWriter implements HttpWriter {
     }
 
     @Override
-    public int writeBody(ByteBuffer buffer) throws IOException {
-        int writeLen = -1;
+    public IOStatus writeBody(ByteBuffer buffer) throws IOException {
         if (contentLength > 0) {
-            writeLen = upstream.write(buffer);
-            write += writeLen;
+            write += upstream.write(buffer);
             if (write >= contentLength) {
-                return -1;
+                return IOStatus.EOF;
             }
+            return IOStatus.MISSION;
+        } else {
+            return IOStatus.EOF;
         }
-        return writeLen;
     }
 }
