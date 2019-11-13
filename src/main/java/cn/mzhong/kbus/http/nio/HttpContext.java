@@ -8,13 +8,15 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 
 /**
- * TODO<br>
+ * Http请求时的IO上下文对象，对象中的所有属性是对线程可见的，使用volatile修饰，
+ * 在任意线程中大可放心访问。HttpContent对象在一个新的请求时创建，而在请求完成
+ * 或者出错时应当被销毁。<br>
  * 创建时间： 2019/11/7 14:19
  *
  * @author mzhong
  * @version 1.0
  */
-public class RequestContext {
+public class HttpContext {
 
     private final HttpHeadReader requestHeadReader = new HttpHeadReader();
 
@@ -28,13 +30,25 @@ public class RequestContext {
         return responseHeadReader;
     }
 
-    private final ByteBuffer buffer = ByteBuffer.allocate(1024);
+    /**
+     * 入站缓冲区
+     */
+    private final ByteBuffer inboundBuffer = ByteBuffer.allocate(4096);
 
-    public ByteBuffer getBuffer() {
-        return buffer;
+    public ByteBuffer getInboundBuffer() {
+        return inboundBuffer;
     }
 
-    private SocketChannel downstream;
+    /**
+     * 出站缓冲区
+     */
+    private final ByteBuffer outboundBuffer = ByteBuffer.allocate(4096);
+
+    public ByteBuffer getOutboundBuffer() {
+        return outboundBuffer;
+    }
+
+    private volatile SocketChannel downstream;
 
     public SocketChannel getDownstream() {
         return downstream;
@@ -44,7 +58,7 @@ public class RequestContext {
         this.downstream = downstream;
     }
 
-    private SocketChannel upstream;
+    private volatile SocketChannel upstream;
 
     public SocketChannel getUpstream() {
         return upstream;
@@ -54,7 +68,7 @@ public class RequestContext {
         this.upstream = upstream;
     }
 
-    private HttpRequest request;
+    private volatile HttpRequest request;
 
     public HttpRequest getRequest() {
         return request;
@@ -64,7 +78,7 @@ public class RequestContext {
         this.request = request;
     }
 
-    private HttpResponse response;
+    private volatile HttpResponse response;
 
     public HttpResponse getResponse() {
         return response;
@@ -74,8 +88,7 @@ public class RequestContext {
         this.response = response;
     }
 
-
-    private HttpWriter responseWriter;
+    private volatile HttpWriter responseWriter;
 
     public HttpWriter getResponseWriter() {
         return responseWriter;
@@ -85,7 +98,7 @@ public class RequestContext {
         this.responseWriter = responseWriter;
     }
 
-    private HttpWriter requestWriter;
+    private volatile HttpWriter requestWriter;
 
     public HttpWriter getRequestWriter() {
         return requestWriter;
@@ -95,7 +108,7 @@ public class RequestContext {
         this.requestWriter = requestWriter;
     }
 
-    private SelectionKey downstreamKey;
+    private volatile SelectionKey downstreamKey;
 
     public SelectionKey getDownstreamKey() {
         return downstreamKey;
@@ -105,7 +118,7 @@ public class RequestContext {
         this.downstreamKey = downstreamKey;
     }
 
-    private SelectionKey upstreamKey;
+    private volatile SelectionKey upstreamKey;
 
     public SelectionKey getUpstreamKey() {
         return upstreamKey;
@@ -113,15 +126,5 @@ public class RequestContext {
 
     public void setUpstreamKey(SelectionKey upstreamKey) {
         this.upstreamKey = upstreamKey;
-    }
-
-    private boolean requested;
-
-    public boolean isRequested() {
-        return requested;
-    }
-
-    public void setRequested(boolean requested) {
-        this.requested = requested;
     }
 }

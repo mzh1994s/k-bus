@@ -16,7 +16,7 @@ public class TruckResponseWriter extends AbstractResponseWriter {
     private byte[] eb = new byte[7];
     private long write;
 
-    public TruckResponseWriter(RequestContext context) {
+    public TruckResponseWriter(HttpContext context) {
         super(context);
     }
 

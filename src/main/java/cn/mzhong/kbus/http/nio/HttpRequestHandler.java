@@ -10,12 +10,12 @@ package cn.mzhong.kbus.http.nio;
 public class HttpRequestHandler extends RequestHandler {
     
     @Override
-    void onRead(RequestContext context) {
+    void onRead(HttpContext context) {
 
     }
 
     @Override
-    void onWrite(RequestContext context) {
+    void onWrite(HttpContext context) {
 
     }
 }

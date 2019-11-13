@@ -15,7 +15,7 @@ public class SimpleResponseWriter extends AbstractResponseWriter {
     private long write;
     private long contentLength;
 
-    public SimpleResponseWriter(RequestContext context, long contentLength) {
+    public SimpleResponseWriter(HttpContext context, long contentLength) {
         super(context);
         this.contentLength = contentLength;
     }
@@ -23,7 +23,6 @@ public class SimpleResponseWriter extends AbstractResponseWriter {
     public IOStatus writeBody(ByteBuffer buffer) throws IOException {
         if (contentLength > 0) {
             write += context.getDownstream().write(buffer);
-            System.out.println(context.getRequest().getRequestLine().getUri() + ":" + write + "/" + contentLength);
             if (write >= contentLength) {
                 return IOStatus.EOF;
             }

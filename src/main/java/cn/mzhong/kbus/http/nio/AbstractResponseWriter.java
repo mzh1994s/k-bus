@@ -12,14 +12,14 @@ import java.nio.ByteBuffer;
  */
 public abstract class AbstractResponseWriter implements HttpWriter {
 
-    protected RequestContext context;
+    protected HttpContext context;
 
-    public AbstractResponseWriter(RequestContext context) {
+    public AbstractResponseWriter(HttpContext context) {
         this.context = context;
     }
 
     @Override
     public void writeHead(ByteBuffer buffer) throws IOException {
-        System.out.println(context.getDownstream().write(buffer));
+        context.getDownstream().write(buffer);
     }
 }
