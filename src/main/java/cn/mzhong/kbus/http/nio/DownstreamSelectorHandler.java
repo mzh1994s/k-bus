@@ -1,6 +1,8 @@
 package cn.mzhong.kbus.http.nio;
 
-import cn.mzhong.kbus.http.*;
+import cn.mzhong.kbus.http.HttpRequest;
+import cn.mzhong.kbus.http.HttpRequestHead;
+import cn.mzhong.kbus.http.Server;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -9,7 +11,6 @@ import java.nio.channels.SelectableChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
-import java.nio.charset.StandardCharsets;
 
 /**
  * TODO<br>
@@ -51,14 +52,14 @@ public class DownstreamSelectorHandler extends SelectorHandler {
         this.register(accept, SelectionKey.OP_READ, null);
     }
 
-    private HttpContext getContext(SelectionKey downstreamKey) {
+    private HttpNioContext getContext(SelectionKey downstreamKey) {
         SocketChannel channel = (SocketChannel) downstreamKey.channel();
-        HttpContext context = (HttpContext) downstreamKey.attachment();
+        HttpNioContext context = (HttpNioContext) downstreamKey.attachment();
         if (context == null) {
             synchronized (downstreamKey) {
-                context = (HttpContext) downstreamKey.attachment();
+                context = (HttpNioContext) downstreamKey.attachment();
                 if (context == null) {
-                    context = new HttpContext();
+                    context = new HttpNioContext();
                     context.setDownstreamKey(downstreamKey);
                     context.setDownstream(channel);
                     downstreamKey.attach(context);
@@ -71,10 +72,11 @@ public class DownstreamSelectorHandler extends SelectorHandler {
 
     @Override
     void onRead(SelectionKey downstreamKey) throws IOException {
-        HttpContext context = getContext(downstreamKey);
+        HttpNioContext context = getContext(downstreamKey);
         SocketChannel downstream = context.getDownstream();
         HttpHeadReader headBuffer = context.getRequestHeadReader();
         ByteBuffer buffer = context.getInboundBuffer();
+        buffer.clear();
         int read = downstream.read(buffer);
         if (read == -1) {
             throw new IOClosedException();
@@ -90,19 +92,15 @@ public class DownstreamSelectorHandler extends SelectorHandler {
             while (buffer.hasRemaining()) {
                 headBuffer.add(buffer.get());
                 if (headBuffer.isEof()) {
-                    SocketChannel upstream = SocketChannel.open(new InetSocketAddress("localhost", 9000));
+                    SocketChannel upstream = SocketChannel.open(
+                            new InetSocketAddress("localhost", 9000));
                     upstream.configureBlocking(false);
                     context.setUpstream(upstream);
-                    String headString = new String(headBuffer.toBytes(), StandardCharsets.ISO_8859_1);
-                    String[] split = headString.split("\r\n");
-                    HttpRequestLine requestLine = HttpRequestLine.parse(split[0]);
-                    HttpHeader header = HttpHeader.parse(split, 1);
-                    header.set("Host", "182.151.197.163:5000");
-                    header.set("Accept-Encoding", "deflate");
-                    HttpRequestHead httpHead = new HttpRequestHead(requestLine, header);
+                    HttpRequestHead httpHead = HttpRequestHead.parse(headBuffer);
                     HttpRequest request = new HttpRequest(httpHead);
                     context.setRequest(request);
-                    context.setRequestWriter(new RequestWriter(context, header.getIntValue("Content-Length")));
+                    context.setRequestWriter(new RequestWriter(context,
+                            httpHead.getHeader().getIntValue("Content-Length")));
                     this.upstreamHandler.append(context);
                     break;
                 }
@@ -110,9 +108,14 @@ public class DownstreamSelectorHandler extends SelectorHandler {
         }
     }
 
+    private void keepWrite(SelectionKey downstreamKey) {
+        downstreamKey.interestOps(downstreamKey.interestOps() | SelectionKey.OP_WRITE);
+        this.wakeup();
+    }
+
     @Override
     void onWrite(SelectionKey downstreamKey) throws IOException {
-        HttpContext context = (HttpContext) downstreamKey.attachment();
+        HttpNioContext context = (HttpNioContext) downstreamKey.attachment();
         SelectionKey upstreamKey = context.getUpstreamKey();
         HttpWriter responseWriter = context.getResponseWriter();
         ByteBuffer buffer = context.getResponse().getHead().getBuffer();
@@ -121,23 +124,21 @@ public class DownstreamSelectorHandler extends SelectorHandler {
             responseWriter.writeHead(buffer);
         }
         if (buffer.hasRemaining()) {
+            this.keepWrite(downstreamKey);
             return;
         }
         buffer = context.getOutboundBuffer();
         if (responseWriter.writeBody(buffer) == IOStatus.EOF) {
             System.out.println("移除上下文：" + downstreamKey);
             upstreamKey.attach(null);
-            upstreamKey.cancel();
             downstreamKey.attach(null);
+            upstreamKey.cancel();
             return;
         }
         if (buffer.hasRemaining()) {
             // 没写完，还要打开写事件
-            downstreamKey.interestOps(downstreamKey.interestOps() | SelectionKey.OP_WRITE);
-            this.wakeup();
+            this.keepWrite(downstreamKey);
         } else {
-            // 写完了，准备从上游接收
-            buffer.clear();
             upstreamKey.interestOps(upstreamKey.interestOps() | SelectionKey.OP_READ);
             upstreamHandler.wakeup();
         }

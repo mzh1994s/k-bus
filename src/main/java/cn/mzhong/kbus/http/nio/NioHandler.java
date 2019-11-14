@@ -35,7 +35,7 @@ public abstract class NioHandler<T> {
         this.next = next;
     }
 
-    abstract void onRead(HttpContext context);
+    abstract void onRead(HttpNioContext context);
 
-    abstract void onWrite(HttpContext context);
+    abstract void onWrite(HttpNioContext context);
 }

@@ -99,7 +99,7 @@ public class HttpHeader {
         return parse(linesString.split("\r\n"), 0);
     }
 
-    public static HttpHeader parse(String[] lines, int offset) throws IOException {
+    public static HttpHeader parse(String[] lines, int offset) {
         HttpHeader httpHeader = new HttpHeader();
         int length = lines.length;
         for (int i = offset; i < length; i++) {

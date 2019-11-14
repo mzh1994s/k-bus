@@ -1,13 +1,14 @@
 package cn.mzhong.kbus.http.nio;
 
-import cn.mzhong.kbus.http.*;
+import cn.mzhong.kbus.http.HttpResponse;
+import cn.mzhong.kbus.http.HttpResponseHead;
+import cn.mzhong.kbus.http.Server;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
-import java.nio.charset.StandardCharsets;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -21,8 +22,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  */
 public class UpstreamSelectorHandler extends SelectorHandler {
 
-    SelectorHandler downstreamHandler;
-    private final Queue<HttpContext> contextQueue = new ConcurrentLinkedQueue<>();
+    private SelectorHandler downstreamHandler;
+    private final Queue<HttpNioContext> contextQueue = new ConcurrentLinkedQueue<>();
 
     public UpstreamSelectorHandler(Server server) {
         super(server);
@@ -34,7 +35,7 @@ public class UpstreamSelectorHandler extends SelectorHandler {
 
     @Override
     void onSelected(Set<SelectionKey> selectionKeys) {
-        HttpContext context;
+        HttpNioContext context;
         while ((context = contextQueue.poll()) != null) {
             try {
                 context.setUpstreamKey(this.register(context.getUpstream(),
@@ -47,9 +48,10 @@ public class UpstreamSelectorHandler extends SelectorHandler {
     @Override
     void onRead(SelectionKey upstreamKey) throws IOException {
         SocketChannel upstream = (SocketChannel) upstreamKey.channel();
-        HttpContext context = (HttpContext) upstreamKey.attachment();
+        HttpNioContext context = (HttpNioContext) upstreamKey.attachment();
         HttpHeadReader headBuffer = context.getResponseHeadReader();
         ByteBuffer buffer = context.getOutboundBuffer();
+        buffer.clear();
         int read = upstream.read(buffer);
         if (read == -1) {
             throw new IOClosedException();
@@ -64,15 +66,11 @@ public class UpstreamSelectorHandler extends SelectorHandler {
             while (buffer.hasRemaining()) {
                 headBuffer.add(buffer.get());
                 if (headBuffer.isEof()) {
-                    String headString = new String(headBuffer.toBytes(), StandardCharsets.ISO_8859_1);
-                    String[] split = headString.split("\r\n");
-                    HttpResponseLine responseLine = HttpResponseLine.parse(split[0]);
-                    HttpHeader header = HttpHeader.parse(split, 1);
-                    HttpResponseHead httpResponseHead = new HttpResponseHead(responseLine, header);
+                    HttpResponseHead httpResponseHead = HttpResponseHead.parse(headBuffer);
                     HttpResponse response = new HttpResponse(httpResponseHead);
                     context.setResponse(response);
 
-                    int contentLength = header.getIntValue("Content-Length");
+                    int contentLength = httpResponseHead.getHeader().getIntValue("Content-Length");
                     HttpWriter responseWriter;
                     if (contentLength > 0) {
                         responseWriter = new SimpleResponseWriter(context, contentLength);
@@ -89,40 +87,51 @@ public class UpstreamSelectorHandler extends SelectorHandler {
         }
     }
 
+    /**
+     * 从{@link #onWrite(SelectionKey)}中拆分出的方法，当本次写操作没有把缓冲区的
+     * 数据写完时，让写事件延续到缓冲区的数据写完为止。
+     *
+     * @param upstreamKey
+     */
+    private void keepWrite(SelectionKey upstreamKey) {
+        upstreamKey.interestOps(upstreamKey.interestOps() | SelectionKey.OP_WRITE);
+        this.wakeup();
+    }
+
+    private void finishWrite(SelectionKey downstreamKey) {
+        // 清除缓冲区
+        downstreamKey.interestOps(downstreamKey.interestOps() | SelectionKey.OP_READ);
+        this.downstreamHandler.wakeup();
+    }
+
     @Override
     void onWrite(SelectionKey upstreamKey) throws IOException {
-        HttpContext context = (HttpContext) upstreamKey.attachment();
+        HttpNioContext context = (HttpNioContext) upstreamKey.attachment();
         SelectionKey downstreamKey = context.getDownstreamKey();
         // 看头有没有传完，传完头再传数据
         ByteBuffer buffer = context.getRequest().getHead().getBuffer();
         if (buffer.hasRemaining()) {
             context.getRequestWriter().writeHead(buffer);
         }
-        // 如果没写完，放入下一次继续
         if (buffer.hasRemaining()) {
+            // 没写完，保持写事件
+            this.keepWrite(upstreamKey);
             return;
         }
         buffer = context.getInboundBuffer();
         if (context.getRequestWriter().writeBody(buffer) == IOStatus.EOF) {
-            // 清除缓冲区
-            buffer.clear();
-            downstreamKey.interestOps(downstreamKey.interestOps() | SelectionKey.OP_READ);
-            this.downstreamHandler.wakeup();
+            this.finishWrite(downstreamKey);
             return;
         }
         if (buffer.hasRemaining()) {
-            // 没写完，还要写
-            upstreamKey.interestOps(upstreamKey.interestOps() | SelectionKey.OP_WRITE);
-            this.wakeup();
+            // 没写完，保持写事件
+            this.keepWrite(upstreamKey);
         } else {
-            // 写完了，打开下游读取事件
-            buffer.clear();
-            downstreamKey.interestOps(downstreamKey.interestOps() | SelectionKey.OP_READ);
-            this.downstreamHandler.wakeup();
+            this.finishWrite(downstreamKey);
         }
     }
 
-    void append(HttpContext context) {
+    void append(HttpNioContext context) {
         contextQueue.add(context);
         this.wakeup();
     }

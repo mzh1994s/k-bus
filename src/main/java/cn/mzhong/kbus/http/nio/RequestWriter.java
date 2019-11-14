@@ -17,7 +17,7 @@ public class RequestWriter implements HttpWriter {
     private long contentLength;
     private long write;
 
-    public RequestWriter(HttpContext context, long contentLength) {
+    public RequestWriter(HttpNioContext context, long contentLength) {
         upstream = context.getUpstream();
         this.contentLength = contentLength;
     }

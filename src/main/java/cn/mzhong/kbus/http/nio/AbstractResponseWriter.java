@@ -12,9 +12,9 @@ import java.nio.ByteBuffer;
  */
 public abstract class AbstractResponseWriter implements HttpWriter {
 
-    protected HttpContext context;
+    protected HttpNioContext context;
 
-    public AbstractResponseWriter(HttpContext context) {
+    public AbstractResponseWriter(HttpNioContext context) {
         this.context = context;
     }
 

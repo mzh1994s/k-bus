@@ -15,7 +15,7 @@ public class SimpleResponseWriter extends AbstractResponseWriter {
     private long write;
     private long contentLength;
 
-    public SimpleResponseWriter(HttpContext context, long contentLength) {
+    public SimpleResponseWriter(HttpNioContext context, long contentLength) {
         super(context);
         this.contentLength = contentLength;
     }

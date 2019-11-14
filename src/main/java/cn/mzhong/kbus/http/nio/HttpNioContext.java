@@ -16,39 +16,51 @@ import java.nio.channels.SocketChannel;
  * @author mzhong
  * @version 1.0
  */
-public class HttpContext {
+public class HttpNioContext {
 
     private final HttpHeadReader requestHeadReader = new HttpHeadReader();
 
-    public HttpHeadReader getRequestHeadReader() {
-        return requestHeadReader;
-    }
-
     private final HttpHeadReader responseHeadReader = new HttpHeadReader();
-
-    public HttpHeadReader getResponseHeadReader() {
-        return responseHeadReader;
-    }
-
     /**
      * 入站缓冲区
      */
     private final ByteBuffer inboundBuffer = ByteBuffer.allocate(4096);
-
-    public ByteBuffer getInboundBuffer() {
-        return inboundBuffer;
-    }
-
     /**
      * 出站缓冲区
      */
     private final ByteBuffer outboundBuffer = ByteBuffer.allocate(4096);
 
+    private volatile SocketChannel downstream;
+
+    private volatile SocketChannel upstream;
+
+    private volatile HttpRequest request;
+
+    private volatile HttpResponse response;
+
+    private volatile HttpWriter responseWriter;
+
+    private volatile HttpWriter requestWriter;
+
+    private volatile SelectionKey downstreamKey;
+
+    private volatile SelectionKey upstreamKey;
+
+    public HttpHeadReader getRequestHeadReader() {
+        return requestHeadReader;
+    }
+
+    public HttpHeadReader getResponseHeadReader() {
+        return responseHeadReader;
+    }
+
+    public ByteBuffer getInboundBuffer() {
+        return inboundBuffer;
+    }
+
     public ByteBuffer getOutboundBuffer() {
         return outboundBuffer;
     }
-
-    private volatile SocketChannel downstream;
 
     public SocketChannel getDownstream() {
         return downstream;
@@ -58,8 +70,6 @@ public class HttpContext {
         this.downstream = downstream;
     }
 
-    private volatile SocketChannel upstream;
-
     public SocketChannel getUpstream() {
         return upstream;
     }
@@ -67,8 +77,6 @@ public class HttpContext {
     public void setUpstream(SocketChannel upstream) {
         this.upstream = upstream;
     }
-
-    private volatile HttpRequest request;
 
     public HttpRequest getRequest() {
         return request;
@@ -78,8 +86,6 @@ public class HttpContext {
         this.request = request;
     }
 
-    private volatile HttpResponse response;
-
     public HttpResponse getResponse() {
         return response;
     }
@@ -87,8 +93,6 @@ public class HttpContext {
     public void setResponse(HttpResponse response) {
         this.response = response;
     }
-
-    private volatile HttpWriter responseWriter;
 
     public HttpWriter getResponseWriter() {
         return responseWriter;
@@ -98,8 +102,6 @@ public class HttpContext {
         this.responseWriter = responseWriter;
     }
 
-    private volatile HttpWriter requestWriter;
-
     public HttpWriter getRequestWriter() {
         return requestWriter;
     }
@@ -108,8 +110,6 @@ public class HttpContext {
         this.requestWriter = requestWriter;
     }
 
-    private volatile SelectionKey downstreamKey;
-
     public SelectionKey getDownstreamKey() {
         return downstreamKey;
     }
@@ -117,8 +117,6 @@ public class HttpContext {
     public void setDownstreamKey(SelectionKey downstreamKey) {
         this.downstreamKey = downstreamKey;
     }
-
-    private volatile SelectionKey upstreamKey;
 
     public SelectionKey getUpstreamKey() {
         return upstreamKey;
