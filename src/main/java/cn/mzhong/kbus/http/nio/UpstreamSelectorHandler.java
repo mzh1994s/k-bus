@@ -49,7 +49,7 @@ public class UpstreamSelectorHandler extends SelectorHandler {
     void onRead(SelectionKey upstreamKey) throws IOException {
         SocketChannel upstream = (SocketChannel) upstreamKey.channel();
         HttpNioContext context = (HttpNioContext) upstreamKey.attachment();
-        HttpHeadReader headBuffer = context.getResponseHeadReader();
+        HttpHeadBuffer headBuffer = context.getResponseHeadReader();
         ByteBuffer buffer = context.getOutboundBuffer();
         buffer.clear();
         int read = upstream.read(buffer);

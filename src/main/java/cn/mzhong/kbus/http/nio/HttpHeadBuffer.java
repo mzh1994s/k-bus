@@ -9,7 +9,7 @@ import java.io.ByteArrayOutputStream;
  * @author mzhong
  * @version 1.0
  */
-public class HttpHeadReader {
+public class HttpHeadBuffer {
     private ByteArrayOutputStream headStream = new ByteArrayOutputStream();
     private byte[] buf = new byte[4];
     private boolean eof;

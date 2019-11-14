@@ -1,6 +1,6 @@
 package cn.mzhong.kbus.http;
 
-import cn.mzhong.kbus.http.nio.HttpHeadReader;
+import cn.mzhong.kbus.http.nio.HttpHeadBuffer;
 import cn.mzhong.kbus.util.ByteUtils;
 
 import java.nio.ByteBuffer;
@@ -45,7 +45,7 @@ public class HttpRequestHead {
                 HttpConstant.LINE_SEPARATOR);
     }
 
-    public static HttpRequestHead parse(HttpHeadReader httpHeadBuf) {
+    public static HttpRequestHead parse(HttpHeadBuffer httpHeadBuf) {
         String headString = new String(httpHeadBuf.toBytes(), StandardCharsets.ISO_8859_1);
         String[] split = headString.split("\r\n");
         HttpRequestLine requestLine = HttpRequestLine.parse(split[0]);

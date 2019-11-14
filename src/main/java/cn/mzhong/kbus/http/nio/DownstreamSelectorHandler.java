@@ -74,7 +74,7 @@ public class DownstreamSelectorHandler extends SelectorHandler {
     void onRead(SelectionKey downstreamKey) throws IOException {
         HttpNioContext context = getContext(downstreamKey);
         SocketChannel downstream = context.getDownstream();
-        HttpHeadReader headBuffer = context.getRequestHeadReader();
+        HttpHeadBuffer headBuffer = context.getRequestHeadReader();
         ByteBuffer buffer = context.getInboundBuffer();
         buffer.clear();
         int read = downstream.read(buffer);

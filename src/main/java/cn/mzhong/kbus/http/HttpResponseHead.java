@@ -1,6 +1,6 @@
 package cn.mzhong.kbus.http;
 
-import cn.mzhong.kbus.http.nio.HttpHeadReader;
+import cn.mzhong.kbus.http.nio.HttpHeadBuffer;
 import cn.mzhong.kbus.util.ByteUtils;
 
 import java.io.IOException;
@@ -46,7 +46,7 @@ public class HttpResponseHead {
                 HttpConstant.LINE_SEPARATOR);
     }
 
-    public static HttpResponseHead parse(HttpHeadReader httpHeadBuf) throws IOException {
+    public static HttpResponseHead parse(HttpHeadBuffer httpHeadBuf) throws IOException {
         String headString = new String(httpHeadBuf.toBytes(), StandardCharsets.ISO_8859_1);
         String[] split = headString.split("\r\n");
         HttpResponseLine responseLine = HttpResponseLine.parse(split[0]);

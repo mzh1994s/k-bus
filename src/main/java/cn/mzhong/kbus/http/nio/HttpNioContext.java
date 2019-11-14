@@ -18,9 +18,9 @@ import java.nio.channels.SocketChannel;
  */
 public class HttpNioContext {
 
-    private final HttpHeadReader requestHeadReader = new HttpHeadReader();
+    private final HttpHeadBuffer requestHeadReader = new HttpHeadBuffer();
 
-    private final HttpHeadReader responseHeadReader = new HttpHeadReader();
+    private final HttpHeadBuffer responseHeadReader = new HttpHeadBuffer();
     /**
      * 入站缓冲区
      */
@@ -46,11 +46,11 @@ public class HttpNioContext {
 
     private volatile SelectionKey upstreamKey;
 
-    public HttpHeadReader getRequestHeadReader() {
+    public HttpHeadBuffer getRequestHeadReader() {
         return requestHeadReader;
     }
 
-    public HttpHeadReader getResponseHeadReader() {
+    public HttpHeadBuffer getResponseHeadReader() {
         return responseHeadReader;
     }
 
