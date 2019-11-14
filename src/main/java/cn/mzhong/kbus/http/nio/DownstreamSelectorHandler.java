@@ -45,18 +45,6 @@ public class DownstreamSelectorHandler extends SelectorHandler {
     }
 
     @Override
-    protected void run(SelectionKey selectionKey) {
-        if (selectionKey.isAcceptable()) {
-            try {
-                this.onAccept(selectionKey);
-            } catch (IOException ignored) {
-            }
-        } else {
-            super.run(selectionKey);
-        }
-    }
-
-    @Override
     void onAccept(SelectionKey selectionKey) throws IOException {
         ServerSocketChannel channel = (ServerSocketChannel) selectionKey.channel();
         SelectableChannel accept = channel.accept().configureBlocking(false);
@@ -87,14 +75,7 @@ public class DownstreamSelectorHandler extends SelectorHandler {
         SocketChannel downstream = context.getDownstream();
         HttpHeadReader headBuffer = context.getRequestHeadReader();
         ByteBuffer buffer = context.getInboundBuffer();
-        if (buffer.position() != 0) {
-            return;
-        }
         int read = downstream.read(buffer);
-        // 如果缓冲器读满，则停止监听读
-        if (read == 0) {
-            return;
-        }
         if (read == -1) {
             throw new IOClosedException();
         }
@@ -148,15 +129,17 @@ public class DownstreamSelectorHandler extends SelectorHandler {
             upstreamKey.attach(null);
             upstreamKey.cancel();
             downstreamKey.attach(null);
-            // 取消写事件监听
-            downstreamKey.interestOps(upstreamKey.interestOps() & ~SelectionKey.OP_WRITE);
-            this.wakeup();
             return;
         }
-        // 如果写完了，换成上游读模式
-        if (!buffer.hasRemaining()) {
-            // 清除缓冲区，否则上游的数据读不进来
+        if (buffer.hasRemaining()) {
+            // 没写完，还要打开写事件
+            downstreamKey.interestOps(downstreamKey.interestOps() | SelectionKey.OP_WRITE);
+            this.wakeup();
+        } else {
+            // 写完了，准备从上游接收
             buffer.clear();
+            upstreamKey.interestOps(upstreamKey.interestOps() | SelectionKey.OP_READ);
+            upstreamHandler.wakeup();
         }
     }
 }

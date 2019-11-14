@@ -62,28 +62,31 @@ public abstract class SelectorHandler implements Startable, Reloadable {
         });
     }
 
-    private void run0(SelectionKey selectionKey) {
-        try {
-            if (selectionKey.isConnectable()) {
-//                selectionKey.interestOps(selectionKey.interestOps() ^ SelectionKey.OP_CONNECT);
-                this.onConnect(selectionKey);
-            } else if (selectionKey.isReadable()) {
-//                selectionKey.interestOps(selectionKey.interestOps() ^ SelectionKey.OP_READ);
-                this.onRead(selectionKey);
-            } else if (selectionKey.isWritable()) {
-//                selectionKey.interestOps(selectionKey.interestOps() ^ SelectionKey.OP_WRITE);
-                this.onWrite(selectionKey);
-            }
-        } catch (Exception e) {
-            selectionKey.cancel();
-        }
+    private void handleConnect(SelectionKey selectionKey) {
+        selectionKey.interestOps(selectionKey.interestOps() & ~SelectionKey.OP_CONNECT);
+        this.onConnect(selectionKey);
     }
 
-    protected void run(SelectionKey selectionKey) {
-//        this.executor.execute(() -> {
-//            this.run0(selectionKey);
-//        });
-        this.run0(selectionKey);
+    private void handleRead(SelectionKey selectionKey) {
+        selectionKey.interestOps(selectionKey.interestOps() & ~SelectionKey.OP_READ);
+        this.executor.execute(() -> {
+            try {
+                this.onRead(selectionKey);
+            } catch (IOException e) {
+                selectionKey.cancel();
+            }
+        });
+    }
+
+    private void handleWrite(SelectionKey selectionKey) {
+        selectionKey.interestOps(selectionKey.interestOps() & ~SelectionKey.OP_WRITE);
+        this.executor.execute(() -> {
+            try {
+                this.onWrite(selectionKey);
+            } catch (IOException e) {
+                selectionKey.cancel();
+            }
+        });
     }
 
     protected void select() throws IOException {
@@ -91,8 +94,17 @@ public abstract class SelectorHandler implements Startable, Reloadable {
         Set<SelectionKey> selectionKeys = this.selector.selectedKeys();
         Iterator<SelectionKey> iterator = selectionKeys.iterator();
         while (iterator.hasNext()) {
-            this.run(iterator.next());
+            SelectionKey selectionKey = iterator.next();
             iterator.remove();
+            if (selectionKey.isAcceptable()) {
+                this.onAccept(selectionKey);
+            } else if (selectionKey.isConnectable()) {
+                this.handleConnect(selectionKey);
+            } else if (selectionKey.isReadable()) {
+                this.handleRead(selectionKey);
+            } else if (selectionKey.isWritable()) {
+                this.handleWrite(selectionKey);
+            }
         }
         this.onSelected(selectionKeys);
     }

@@ -37,7 +37,8 @@ public class UpstreamSelectorHandler extends SelectorHandler {
         HttpContext context;
         while ((context = contextQueue.poll()) != null) {
             try {
-                context.setUpstreamKey(this.register(context.getUpstream(), SelectionKey.OP_WRITE, context));
+                context.setUpstreamKey(this.register(context.getUpstream(),
+                        SelectionKey.OP_WRITE | SelectionKey.OP_READ, context));
             } catch (ClosedChannelException ignored) {
             }
         }
@@ -49,14 +50,7 @@ public class UpstreamSelectorHandler extends SelectorHandler {
         HttpContext context = (HttpContext) upstreamKey.attachment();
         HttpHeadReader headBuffer = context.getResponseHeadReader();
         ByteBuffer buffer = context.getOutboundBuffer();
-        // 有数据没写完就不读
-        if (buffer.position() != 0) {
-            return;
-        }
         int read = upstream.read(buffer);
-        if (read == 0) {
-            return;
-        }
         if (read == -1) {
             throw new IOClosedException();
         }
@@ -64,8 +58,8 @@ public class UpstreamSelectorHandler extends SelectorHandler {
         SelectionKey downstreamKey = context.getDownstreamKey();
         if (headBuffer.isEof()) {
             // 下游写
-//            downstreamKey.interestOps(downstreamKey.interestOps() | SelectionKey.OP_WRITE);
-//            this.downstreamHandler.wakeup();
+            downstreamKey.interestOps(downstreamKey.interestOps() | SelectionKey.OP_WRITE);
+            this.downstreamHandler.wakeup();
         } else {
             while (buffer.hasRemaining()) {
                 headBuffer.add(buffer.get());
@@ -98,6 +92,7 @@ public class UpstreamSelectorHandler extends SelectorHandler {
     @Override
     void onWrite(SelectionKey upstreamKey) throws IOException {
         HttpContext context = (HttpContext) upstreamKey.attachment();
+        SelectionKey downstreamKey = context.getDownstreamKey();
         // 看头有没有传完，传完头再传数据
         ByteBuffer buffer = context.getRequest().getHead().getBuffer();
         if (buffer.hasRemaining()) {
@@ -109,10 +104,21 @@ public class UpstreamSelectorHandler extends SelectorHandler {
         }
         buffer = context.getInboundBuffer();
         if (context.getRequestWriter().writeBody(buffer) == IOStatus.EOF) {
-            // 取消写事件监听
-            upstreamKey.interestOps(upstreamKey.interestOps() & ~SelectionKey.OP_WRITE);
             // 清除缓冲区
             buffer.clear();
+            downstreamKey.interestOps(downstreamKey.interestOps() | SelectionKey.OP_READ);
+            this.downstreamHandler.wakeup();
+            return;
+        }
+        if (buffer.hasRemaining()) {
+            // 没写完，还要写
+            upstreamKey.interestOps(upstreamKey.interestOps() | SelectionKey.OP_WRITE);
+            this.wakeup();
+        } else {
+            // 写完了，打开下游读取事件
+            buffer.clear();
+            downstreamKey.interestOps(downstreamKey.interestOps() | SelectionKey.OP_READ);
+            this.downstreamHandler.wakeup();
         }
     }
 
